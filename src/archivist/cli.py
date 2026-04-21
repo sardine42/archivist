@@ -519,7 +519,7 @@ def arxiv_fetch(date: str | None, date_from: str | None, date_to: str | None,
     })
 
     click.echo(f"\nCandidates saved to: {output_file}")
-    click.echo(f"Next: run /arxiv-digest to score with LLM, download top papers, and generate digest.")
+    click.echo(f"Next: run `archivist digest run` to score, deep-read top papers, and generate the digest.")
 
 
 @arxiv_group.command("download")

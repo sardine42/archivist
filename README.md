@@ -154,15 +154,12 @@ CRON_TZ=Asia/Shanghai
 
 | Skill | 说明 |
 |-------|------|
-| `/arxiv-digest` | 🔁 已迁移为脚本，文件改为指引（指向 `archivist digest run`） |
-| `/digest-weekly` | 🔁 同上 |
-| `/digest-monthly` | 🔁 同上 |
-| `/read-paper` | ✅ 活跃 Skill — 下载/定位 PDF、精读、figure 抽取、语义孪生对比、benchmark/DAG 更新 |
-| `/read-doc` | ✅ 内部文档精读 — 支持飞书 URL / 本地 PDF / Markdown 三种输入，归档到 `archive/docs/` |
-| `/refine-rubric` | ✅ 评分标准反馈闭环 — 多轮对话更新 `archive/criteria/*.md` |
-| `/deploy` | ✅ 构建网站 → rsync 到服务器 → 提交 main → rebase public → push github |
-| `/archive-add` | 归档对话总结 / markdown 文档 |
-| `/archive-search` | 文档库检索 |
+| `/read-paper` | 下载/定位 PDF、精读、figure 抽取、语义孪生对比、benchmark/DAG 更新 |
+| `/read-doc` | 内部文档精读 — 支持飞书 URL / 本地 PDF / Markdown 三种输入，归档到 `archive/docs/` |
+| `/refine-rubric` | 评分标准反馈闭环 — 多轮对话更新 `archive/criteria/*.md` |
+| `/deploy` | 构建网站 → rsync 到服务器 → 提交 main → push github |
+
+日报 / 周报 / 月报流程已完全脚本化，**不要通过 Skill 触发**，直接调 `archivist digest run` / `run-weekly` / `run-monthly`。
 
 `/read-paper` 由 `digest run` Step 3 通过 `claude -p "/read-paper <id>"` 串行调用（保留是因为
 PDF 阅读、公式抽取、表格还原、figure 插入位置、语义孪生检索、benchmark 冲突解析、DAG 边推断都需要 agent 智能）。
@@ -229,7 +226,6 @@ src/archivist/
 scripts/
 ├── download-paper.py            # /read-paper 内部用：ArXiv ID / --search / --local 三模式
 ├── extract-figures.py           # /read-paper 内部用：抽取 figures + 生成 figures.json
-├── archive-doc.py               # /archive-add 内部用
 └── cron/
     ├── daily-digest.sh          # flock -n 非阻塞
     ├── weekly-digest.sh         # flock -w 3600 阻塞等日报
@@ -237,17 +233,12 @@ scripts/
     └── crontab.txt              # crontab 安装文件
 
 .claude/skills/
-├── arxiv-digest/SKILL.md        # 指引（指向 archivist digest run）
-├── digest-weekly/SKILL.md       # 指引
-├── digest-monthly/SKILL.md      # 指引
 ├── read-paper/
-│   ├── SKILL.md                 # 活跃 Skill（含 Step 2.5 语义孪生检索）
+│   ├── SKILL.md                 # 精读 Skill（含 Step 2.5 语义孪生检索）
 │   └── update-data-schema.md    # paper apply-reading 的 JSON schema
 ├── read-doc/SKILL.md            # 飞书 / PDF / Markdown 精读
 ├── refine-rubric/SKILL.md       # 评分标准反馈闭环
-├── deploy/SKILL.md              # build + deploy + git main/public 同步
-├── archive-add/SKILL.md
-└── archive-search/SKILL.md
+└── deploy/SKILL.md              # build + deploy + git push
 
 archive/criteria/                 # gitignored — 个人评分标准，随反馈演化
 ├── scoring-criteria.md           # 摘要评分（digest_runner 拼到 score prompt）

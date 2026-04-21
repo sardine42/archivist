@@ -77,7 +77,7 @@ argument-hint: "[<slug>] | [--all-pending]"
    - `deeply_read=False` → `archive/criteria/scoring-criteria.md`
    - `deeply_read=True`  → `archive/criteria/reading-criteria.md`
 4. **另一份 criteria**：一眼读过，判断反馈是否也该影响另一阶段评分
-5. **（可选）类似先例**：用 `/archive-search` 找 rating 或 score 相近的历史 paper，看是否存在模式
+5. **（可选）类似先例**：用 Grep 在 `archive/papers/*/*/meta.json` 搜 rating 或 score 相近的历史 paper，看是否存在模式
 
 ### Step 5. 推理 + 向用户提议改动
 

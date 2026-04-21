@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ meta.title }} — Archivist{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+    <a href="/reading/?type=digests" class="back-link">← 返回报告列表</a>
+
+    <!-- Metadata card -->
+    <div class="meta-card">
+        <h1 class="meta-title">{{ meta.title }}</h1>
+
+        <div class="meta-row">
+            <span class="tag tag-{{ meta.period_type }}">
+                {{ "日报" if meta.period_type == "daily" else "周报" if meta.period_type == "weekly" else "月报" }}
+            </span>
+            <span class="meta-date">📅 {{ meta.period_start }}{% if meta.period_end != meta.period_start %} ~ {{ meta.period_end }}{% endif %}</span>
+        </div>
+
+        {% if meta.theme %}
+        <div class="meta-summary">{{ meta.theme }}</div>
+        {% endif %}
+
+        {% if meta.theme_tags %}
+        <div class="meta-keywords">
+            {% for tag in meta.theme_tags %}
+            <span class="keyword-pill">{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div style="font-size:13px;color:#666;margin-top:8px;">
+            📊 共 <strong>{{ meta.paper_count }}</strong> 篇 · 精读 <strong>{{ meta.deeply_read_count }}</strong>
+        </div>
+    </div>
+
+    <!-- Content -->
+    <article class="reading-content">
+        {{ content | safe }}
+    </article>
+</div>
+
+<style>
+.tag-daily { background: #e3f2fd; color: #1976D2; }
+.tag-weekly { background: #fff3e0; color: #E65100; }
+.tag-monthly { background: #f3e5f5; color: #7B1FA2; }
+</style>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.title }} — Archivist{% endblock %}
+
+{% block head_extra %}
+<script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
+    document.querySelectorAll('code.language-mermaid').forEach(block => {
+        const pre = block.parentElement;
+        const div = document.createElement('div');
+        div.className = 'mermaid';
+        div.textContent = block.textContent;
+        pre.replaceWith(div);
+    });
+    await mermaid.run();
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+    <a href="/docs/" class="back-link">← Back to docs</a>
+    <div class="meta-card">
+        <h1 class="meta-title">{{ doc.title }}</h1>
+        <div class="meta-row">
+            {% if doc.team %}<span class="tag tag-company">{{ doc.team }}</span>{% endif %}
+            {% if doc.type %}<span class="tag">{{ doc.type }}</span>{% endif %}
+            {% if doc.date %}<span class="meta-date">{{ doc.date }}</span>{% endif %}
+        </div>
+        {% if doc.summary %}
+        <div class="meta-summary">{{ doc.summary }}</div>
+        {% endif %}
+        {% if doc.source %}
+        <div class="meta-links">
+            <a href="{{ doc.source }}" target="_blank" class="meta-link">Source</a>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if toc %}
+    <button class="toc-drawer-btn" onclick="document.getElementById('tocDrawer').classList.toggle('open'); document.getElementById('tocDrawerBackdrop').classList.toggle('open');">
+        ≡ 目录
+    </button>
+    <div class="toc-drawer" id="tocDrawer">
+        <div class="toc-title">目录</div>
+        {{ toc | safe }}
+    </div>
+    <div class="toc-drawer-backdrop" id="tocDrawerBackdrop" onclick="document.getElementById('tocDrawer').classList.remove('open'); this.classList.remove('open');"></div>
+    {% endif %}
+
+    <div class="detail-body">
+        {% if toc %}
+        <aside class="toc-sidebar">
+            <div class="toc-title">Contents</div>
+            {{ toc | safe }}
+        </aside>
+        {% endif %}
+
+        <article class="reading-content">
+            {{ content | safe }}
+        </article>
+    </div>
+</div>
+
+<script>
+(function() {
+    var tocLinks = document.querySelectorAll('.toc-sidebar a[href^="#"]');
+    if (!tocLinks.length) return;
+    var headings = [];
+    tocLinks.forEach(function(link) {
+        var id = decodeURIComponent(link.getAttribute('href').slice(1));
+        var el = document.getElementById(id);
+        if (el) headings.push({ el: el, link: link });
+    });
+    if (!headings.length) return;
+    var active = null;
+    function update() {
+        var current = null;
+        for (var i = headings.length - 1; i >= 0; i--) {
+            if (headings[i].el.getBoundingClientRect().top <= 80) { current = headings[i]; break; }
+        }
+        if (!current) current = headings[0];
+        if (current && current.link !== active) {
+            if (active) active.classList.remove('toc-active');
+            current.link.classList.add('toc-active');
+            active = current.link;
+        }
+    }
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+})();
+(function() {
+    var drawer = document.getElementById('tocDrawer');
+    var backdrop = document.getElementById('tocDrawerBackdrop');
+    if (!drawer) return;
+    drawer.querySelectorAll('a').forEach(function(a) {
+        a.addEventListener('click', function() {
+            drawer.classList.remove('open');
+            if (backdrop) backdrop.classList.remove('open');
+        });
+    });
+})();
+</script>
+{% endblock %}

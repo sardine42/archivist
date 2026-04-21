@@ -1,0 +1,50 @@
+# ─── Python ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ─── Virtual env ──────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ─── Generated site & build artifacts ─────────────────────
+_site/
+dist/
+build/
+
+# ─── Logs ─────────────────────────────────────────────────
+logs/
+*.log
+
+# ─── Editor / OS ──────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ─── Local state ──────────────────────────────────────────
+.paper-list.json
+.paper-reading-progress.json
+.claude/scheduled_tasks.lock
+
+# ─── User-specific config overrides ───────────────────────
+# Deploy host / site base_url / lark user id live here and
+# deep-merge over config.yaml at runtime. See config.local.yaml.example.
+config.local.yaml
+
+# ─── Archive (runtime data, not framework code) ───────────
+# 整个 archive/ 是流水线产物 + 个人数据（论文 PDF / 精读报告 /
+# 日报周报 / benchmark / DAG / criteria / 内部文档），不进 git。
+archive/
+
+# ─── Temporary files ──────────────────────────────────────
+/tmp/
+*.tmp

@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+{% block title %}Paper Reading — Archivist{% endblock %}
+
+{% block content %}
+<div class="reading-list">
+    <div class="page-header">
+        <h1>Paper Reading</h1>
+        <span class="paper-count">{{ total }} papers</span>
+    </div>
+
+    <!-- Sub-tabs -->
+    <div class="sub-tabs">
+        <a href="/reading/" class="sub-tab {{ 'active' if doc_type != 'digests' else '' }}">
+            <span class="sub-tab-icon">📄</span>
+            <span class="sub-tab-label">论文</span>
+            <span class="sub-tab-count">{{ total }}</span>
+        </a>
+        <a href="/reading/digests/" class="sub-tab {{ 'active' if doc_type == 'digests' else '' }}">
+            <span class="sub-tab-icon">📅</span>
+            <span class="sub-tab-label">报告</span>
+            <span class="sub-tab-count">{{ digest_count or 0 }}</span>
+        </a>
+        <a href="/docs/" class="sub-tab">
+            <span class="sub-tab-icon">🔒</span>
+            <span class="sub-tab-label">个人文档</span>
+            <span class="sub-tab-count">{{ doc_count or 0 }}</span>
+        </a>
+    </div>
+
+    {% if doc_type == 'digests' %}
+    <!-- Digests view -->
+    <div class="digest-tabs">
+        <button class="digest-tab active" data-period="daily" onclick="switchDigestTab('daily')">日报 ({{ daily|length }})</button>
+        <button class="digest-tab" data-period="weekly" onclick="switchDigestTab('weekly')">周报 ({{ weekly|length }})</button>
+        <button class="digest-tab" data-period="monthly" onclick="switchDigestTab('monthly')">月报 ({{ monthly|length }})</button>
+    </div>
+
+    <div id="digest-list-daily" class="digest-list">
+        {% for d in daily %}
+        <a href="/reading/digest/daily/{{ d.id }}/" class="digest-card">
+            <div class="digest-card-header">
+                <span class="digest-date">📅 {{ d.id }}</span>
+                <span class="digest-stats">{{ d.paper_count }} 篇 · 精读 {{ d.deeply_read_count }}</span>
+            </div>
+            {% if d.theme %}<div class="digest-theme">{{ d.theme }}</div>{% endif %}
+            {% if d.summary %}<div class="digest-summary">{{ d.summary[:200] }}{% if d.summary|length > 200 %}...{% endif %}</div>{% endif %}
+            {% if d.theme_tags %}
+            <div class="digest-tags">
+                {% for tag in d.theme_tags %}<span class="keyword-pill">{{ tag }}</span>{% endfor %}
+            </div>
+            {% endif %}
+        </a>
+        {% endfor %}
+        {% if not daily %}<div class="empty-state">暂无日报</div>{% endif %}
+    </div>
+
+    <div id="digest-list-weekly" class="digest-list" style="display:none;">
+        {% for d in weekly %}
+        <a href="/reading/digest/weekly/{{ d.id }}/" class="digest-card">
+            <div class="digest-card-header">
+                <span class="digest-date">📅 {{ d.id }} ({{ d.period_start }} ~ {{ d.period_end }})</span>
+                <span class="digest-stats">{{ d.paper_count }} 篇</span>
+            </div>
+            {% if d.theme %}<div class="digest-theme">{{ d.theme }}</div>{% endif %}
+            {% if d.summary %}<div class="digest-summary">{{ d.summary[:300] }}{% if d.summary|length > 300 %}...{% endif %}</div>{% endif %}
+        </a>
+        {% endfor %}
+        {% if not weekly %}<div class="empty-state">暂无周报</div>{% endif %}
+    </div>
+
+    <div id="digest-list-monthly" class="digest-list" style="display:none;">
+        {% for d in monthly %}
+        <a href="/reading/digest/monthly/{{ d.id }}/" class="digest-card">
+            <div class="digest-card-header">
+                <span class="digest-date">📅 {{ d.id }}</span>
+                <span class="digest-stats">{{ d.paper_count }} 篇</span>
+            </div>
+            {% if d.theme %}<div class="digest-theme">{{ d.theme }}</div>{% endif %}
+            {% if d.summary %}<div class="digest-summary">{{ d.summary[:400] }}{% if d.summary|length > 400 %}...{% endif %}</div>{% endif %}
+        </a>
+        {% endfor %}
+        {% if not monthly %}<div class="empty-state">暂无月报</div>{% endif %}
+    </div>
+
+    <script>
+    function switchDigestTab(period) {
+        document.querySelectorAll('.digest-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.digest-tab[data-period="${period}"]`).classList.add('active');
+        document.querySelectorAll('.digest-list').forEach(l => l.style.display = 'none');
+        document.getElementById('digest-list-' + period).style.display = '';
+    }
+    </script>
+    {% else %}
+
+    <!-- Filters -->
+    <div class="filters">
+        <label class="filter-label">模型:</label>
+        <input type="text" id="modelSearch" list="modelSearchList"
+               class="search-input"
+               placeholder="输入或选择模型名…"
+               autocomplete="off"
+               oninput="onModelSearchInput()">
+        <datalist id="modelSearchList"></datalist>
+
+        <label class="filter-label">类别:</label>
+        <div class="dropdown-multi" id="categoryFilter">
+            <div class="dropdown-btn" onclick="toggleDropdown('categoryFilter')">全部 ▾</div>
+            <div class="dropdown-menu">
+                <div class="dropdown-actions">
+                    <a onclick="checkAll('categoryFilter')">全选</a>
+                    <a onclick="clearAll('categoryFilter')">清空</a>
+                </div>
+                {% for cat in categories %}
+                <label class="dropdown-item">
+                    <input type="checkbox" checked value="{{ cat }}" data-label="{{ '生成式' if cat == 'generative-rec' else '判别式' if cat == 'discriminative-rec' else 'LLM' if cat == 'llm' else cat }}">
+                    {{ "生成式" if cat == "generative-rec" else "判别式" if cat == "discriminative-rec" else "LLM" if cat == "llm" else cat }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <label class="filter-label">公司:</label>
+        <div class="dropdown-multi" id="companyFilter">
+            <div class="dropdown-btn" onclick="toggleDropdown('companyFilter')">全部 ▾</div>
+            <div class="dropdown-menu">
+                <div class="dropdown-actions">
+                    <a onclick="checkAll('companyFilter')">全选</a>
+                    <a onclick="clearAll('companyFilter')">清空</a>
+                </div>
+                {% for co in companies %}
+                <label class="dropdown-item">
+                    <input type="checkbox" checked value="{{ co }}" data-label="{{ co }}">
+                    {{ co }}
+                </label>
+                {% endfor %}
+                <label class="dropdown-item">
+                    <input type="checkbox" checked value="" data-label="学术">
+                    学术
+                </label>
+            </div>
+        </div>
+
+        <label class="filter-label">标签:</label>
+        <div class="dropdown-multi" id="tagFilter">
+            <div class="dropdown-btn" onclick="toggleDropdown('tagFilter')" style="min-width:160px">全部 ▾</div>
+            <div class="dropdown-menu">
+                <div class="dropdown-actions">
+                    <a onclick="checkAll('tagFilter')">全选</a>
+                    <a onclick="clearAll('tagFilter')">清空</a>
+                </div>
+                {% for dim, tags in tag_groups.items() %}
+                <div class="dropdown-group-label">{{ dim }}</div>
+                {% for tag in tags %}
+                <label class="dropdown-item">
+                    <input type="checkbox" checked value="{{ tag }}" data-label="{{ tag }}">
+                    {{ tag }}
+                </label>
+                {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <label class="filter-label">排序:</label>
+        <select id="sortSelect" class="sort-select">
+            <option value="published_date" {{ "selected" if sort_by == "published_date" }}>发布日期 ↓</option>
+            <option value="date_added" {{ "selected" if sort_by == "date_added" }}>归档时间 ↓</option>
+            <option value="reading_score" {{ "selected" if sort_by == "reading_score" }}>精读评分 ↓</option>
+            <option value="score" {{ "selected" if sort_by == "score" }}>摘要评分 ↓</option>
+            <option value="rating" {{ "selected" if sort_by == "rating" }}>用户评分 ↓</option>
+        </select>
+
+        <button class="filter-confirm-btn" onclick="confirmFilters()">确定</button>
+    </div>
+
+    <!-- Paper cards -->
+    <div class="paper-cards" id="paperCards">
+        {% for item in papers %}
+        {% set p = item.meta %}
+        <div class="paper-card"
+             data-slug="{{ p.slug }}"
+             data-category="{{ p.category }}"
+             data-company="{{ item.company }}"
+             data-tags="{{ p.tags | join(',') }}"
+             data-published-date="{{ p.published_date }}"
+             data-reading-score="{{ p.reading_score }}"
+             data-score="{{ p.score }}"
+             data-date-added="{{ p.date_added }}"
+             data-rating="{{ p.rating or 0 }}">
+            <div class="card-top">
+                <div class="card-tags">
+                    <span class="tag tag-{{ p.category }}">
+                        {{ "生成式" if p.category == "generative-rec" else "判别式" if p.category == "discriminative-rec" else "LLM" if p.category == "llm" else p.category }}
+                    </span>
+                    {% if item.company %}
+                    <span class="tag tag-company">{{ item.company }}</span>
+                    {% else %}
+                    <span class="tag tag-academic">学术</span>
+                    {% endif %}
+                </div>
+                <div class="card-scores">
+                    <span class="score score-abstract" title="Abstract score">{{ "%.0f" | format(p.score) if p.score else "—" }}</span>
+                    <span class="score-sep">│</span>
+                    <span class="score score-reading" title="Reading score">{{ "%.0f" | format(p.reading_score) if p.reading_score else "—" }}</span>
+                    <span class="score-sep">│</span>
+                    <span class="score score-rating" title="Human rating">{{ p.rating if p.rating else "—" }}</span>
+                </div>
+            </div>
+            {% if p.model_name %}
+            <a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-model">{{ p.model_name }}</a>
+            {% endif %}
+            <a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-title">{{ p.title }}</a>
+            {% if p.one_line_summary %}
+            <div class="card-summary">{{ p.one_line_summary }}</div>
+            {% endif %}
+            <div class="card-bottom">
+                <div class="card-keywords">
+                    {% for tag in p.tags[:5] %}
+                    <span class="keyword-pill">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+                {% if p.published_date %}
+                <span class="card-date">{{ p.published_date }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}  {# end of doc_type != digests #}
+</div>
+
+<script>
+function toggleDropdown(id) {
+    const dd = document.getElementById(id);
+    dd.classList.toggle('open');
+    document.querySelectorAll('.dropdown-multi').forEach(d => {
+        if (d.id !== id) d.classList.remove('open');
+    });
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dropdown-multi')) {
+        document.querySelectorAll('.dropdown-multi').forEach(d => d.classList.remove('open'));
+    }
+});
+
+function getChecked(id) {
+    return [...document.querySelectorAll(`#${id} .dropdown-menu input:checked`)].map(cb => cb.value);
+}
+
+function getTotal(id) {
+    return document.querySelectorAll(`#${id} .dropdown-menu input`).length;
+}
+
+function checkAll(id) {
+    document.querySelectorAll(`#${id} .dropdown-menu input`).forEach(cb => cb.checked = true);
+    updateLabel(id);
+}
+
+function clearAll(id) {
+    document.querySelectorAll(`#${id} .dropdown-menu input`).forEach(cb => cb.checked = false);
+    updateLabel(id);
+}
+
+function updateLabel(id) {
+    const inputs = document.querySelectorAll(`#${id} input[type="checkbox"]`);
+    const checked = Array.from(inputs).filter(cb => cb.checked);
+    const total = inputs.length;
+    const btn = document.querySelector(`#${id} .dropdown-btn`);
+    let text;
+    if (checked.length === total) text = '全部';
+    else if (checked.length === 0) text = '无';
+    else if (checked.length === 1) text = checked[0].getAttribute('data-label') || checked[0].value;
+    else text = checked.length + '/' + total;
+    btn.textContent = text + ' ▾';
+}
+
+function applyFilters() {
+    const cats = getChecked('categoryFilter');
+    const cos = getChecked('companyFilter');
+    const tags = getChecked('tagFilter');
+
+    updateLabel('categoryFilter');
+    updateLabel('companyFilter');
+    updateLabel('tagFilter');
+
+    const allCats = cats.length === getTotal('categoryFilter');
+    const allCos = cos.length === getTotal('companyFilter');
+    const allTags = tags.length === getTotal('tagFilter');
+
+    let visible = 0;
+    document.querySelectorAll('.paper-card').forEach(card => {
+        const cardCat = card.dataset.category;
+        const cardCo = card.dataset.company;
+        const cardTags = card.dataset.tags.split(',');
+
+        const catOk = allCats || cats.includes(cardCat);
+        const coOk = allCos || cos.includes(cardCo);
+        const tagOk = allTags || cardTags.some(t => tags.includes(t));
+
+        // Model-name search filter — only when an exact model match is active
+        const modelOk = !_modelFilterSlugs || _modelFilterSlugs.has(card.dataset.slug);
+
+        const show = catOk && coOk && tagOk && modelOk;
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+
+    document.querySelector('.paper-count').textContent = `${visible} papers`;
+}
+
+function sortCards() {
+    const sortBy = document.getElementById('sortSelect').value;
+    const container = document.getElementById('paperCards');
+    const cards = [...container.querySelectorAll('.paper-card')];
+
+    cards.sort((a, b) => {
+        if (sortBy === 'published_date') {
+            return (b.dataset.publishedDate || '').localeCompare(a.dataset.publishedDate || '');
+        } else if (sortBy === 'date_added') {
+            return (b.dataset.dateAdded || '').localeCompare(a.dataset.dateAdded || '');
+        } else if (sortBy === 'reading_score') {
+            return (parseFloat(b.dataset.readingScore) || 0) - (parseFloat(a.dataset.readingScore) || 0);
+        } else if (sortBy === 'score') {
+            return (parseFloat(b.dataset.score) || 0) - (parseFloat(a.dataset.score) || 0);
+        } else if (sortBy === 'rating') {
+            return (parseFloat(b.dataset.rating) || 0) - (parseFloat(a.dataset.rating) || 0);
+        }
+        return 0;
+    });
+
+    cards.forEach(card => container.appendChild(card));
+}
+
+function confirmFilters() {
+    applyFilters();
+    // If a model search is active, don't resort — keep proposer-first ordering.
+    // Otherwise honour the user's chosen sort.
+    if (_modelFilterSlugs) {
+        reorderForSearch();
+    } else {
+        sortCards();
+    }
+}
+
+// ── Model-name search (autocomplete via datalist + exact match) ──
+
+let _modelIndex = null;           // { models: [...] }
+let _modelByNameLower = {};       // name_lower → index record
+let _modelFilterSlugs = null;     // null = inactive; Set<slug> = active
+
+async function loadModelIndex() {
+    if (_modelIndex) return _modelIndex;
+    try {
+        const r = await fetch('/search/model-index.json');
+        _modelIndex = await r.json();
+    } catch (e) {
+        console.warn('model-index load failed:', e);
+        _modelIndex = { models: [] };
+        return _modelIndex;
+    }
+    const dl = document.getElementById('modelSearchList');
+    _modelIndex.models.forEach(m => {
+        _modelByNameLower[m.name_lower] = m;
+        const opt = document.createElement('option');
+        opt.value = m.name;
+        dl.appendChild(opt);
+    });
+    return _modelIndex;
+}
+
+async function onModelSearchInput() {
+    const raw = document.getElementById('modelSearch').value.trim();
+    if (!raw) {
+        clearModelSearch();
+        return;
+    }
+    await loadModelIndex();
+    const rec = _modelByNameLower[raw.toLowerCase()];
+    if (!rec) return;  // partial input — noop until user picks or types exact
+    applyModelSearch(rec);
+}
+
+function applyModelSearch(rec) {
+    // Clear any previous role markers
+    document.querySelectorAll('.paper-card[data-search-role]').forEach(c => {
+        c.removeAttribute('data-search-role');
+    });
+    const proposerSlug = rec.proposer ? rec.proposer.slug : null;
+    const slugs = new Set();
+    if (proposerSlug) slugs.add(proposerSlug);
+    rec.referring_papers.forEach(p => slugs.add(p.slug));
+    document.querySelectorAll('.paper-card').forEach(card => {
+        if (card.dataset.slug === proposerSlug) {
+            card.setAttribute('data-search-role', 'proposer');
+        } else if (slugs.has(card.dataset.slug)) {
+            card.setAttribute('data-search-role', 'referrer');
+        }
+    });
+    _modelFilterSlugs = slugs;
+    applyFilters();
+    reorderForSearch();
+}
+
+function clearModelSearch() {
+    if (_modelFilterSlugs === null) return;  // already inactive
+    _modelFilterSlugs = null;
+    document.querySelectorAll('.paper-card[data-search-role]').forEach(c => {
+        c.removeAttribute('data-search-role');
+    });
+    applyFilters();
+    sortCards();
+}
+
+function reorderForSearch() {
+    const container = document.getElementById('paperCards');
+    const all = [...container.querySelectorAll('.paper-card')];
+    all.sort((a, b) => {
+        const aRole = a.getAttribute('data-search-role') || '';
+        const bRole = b.getAttribute('data-search-role') || '';
+        if (aRole === 'proposer' && bRole !== 'proposer') return -1;
+        if (bRole === 'proposer' && aRole !== 'proposer') return 1;
+        return (b.dataset.publishedDate || '').localeCompare(a.dataset.publishedDate || '');
+    });
+    all.forEach(c => container.appendChild(c));
+}
+
+window.addEventListener('DOMContentLoaded', loadModelIndex);
+</script>
+{% endblock %}

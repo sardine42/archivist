@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}个人文档 — Archivist{% endblock %}
+{% block content %}
+<div class="reading-list">
+    <div class="page-header">
+        <h1>Paper Reading</h1>
+        <span class="paper-count">{{ docs | length }} docs</span>
+    </div>
+
+    <!-- Sub-tabs (same as reading/index.html) -->
+    <div class="sub-tabs">
+        <a href="/reading/" class="sub-tab">
+            <span class="sub-tab-icon">📄</span>
+            <span class="sub-tab-label">论文</span>
+        </a>
+        <a href="/reading/digests/" class="sub-tab">
+            <span class="sub-tab-icon">📅</span>
+            <span class="sub-tab-label">报告</span>
+        </a>
+        <a href="/docs/" class="sub-tab active">
+            <span class="sub-tab-icon">🔒</span>
+            <span class="sub-tab-label">个人文档</span>
+            <span class="sub-tab-count">{{ docs | length }}</span>
+        </a>
+    </div>
+
+    <!-- Sort -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <label style="color:#555;font-size:13px;">排序:</label>
+        <select id="sortSelect" onchange="sortDocs()" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+            <option value="date" selected>日期 ↓</option>
+            <option value="title">标题 A-Z</option>
+        </select>
+    </div>
+
+    <!-- Doc cards -->
+    <div class="doc-list" id="docList">
+        {% for doc in docs %}
+        <a href="/docs/{{ doc.slug }}/" class="doc-card" data-date="{{ doc.date }}" data-title="{{ doc.title }}">
+            <div class="doc-card-title">{{ doc.title }}</div>
+            <div class="doc-card-meta">
+                {% if doc.team %}<span class="tag tag-company">{{ doc.team }}</span>{% endif %}
+                {% if doc.type %}<span class="tag">{{ doc.type }}</span>{% endif %}
+                {% if doc.date %}<span class="meta-date">{{ doc.date }}</span>{% endif %}
+            </div>
+            {% if doc.summary %}
+            <div class="doc-card-summary">{{ doc.summary }}</div>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+function sortDocs() {
+    var sortBy = document.getElementById('sortSelect').value;
+    var container = document.getElementById('docList');
+    var cards = [].slice.call(container.querySelectorAll('.doc-card'));
+    cards.sort(function(a, b) {
+        if (sortBy === 'date') {
+            return (b.dataset.date || '').localeCompare(a.dataset.date || '');
+        } else {
+            return (a.dataset.title || '').localeCompare(b.dataset.title || '');
+        }
+    });
+    cards.forEach(function(card) { container.appendChild(card); });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,871 @@
+{% extends "base.html" %}
+{% block title %}Model Graph — Archivist{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+<style>
+/* Full-screen takeover: escape .main's max-width / padding constraints */
+.main { max-width: none !important; padding: 0 !important; margin: 0 !important; }
+.graph-page { display: flex; flex-direction: column; height: calc(100vh - 56px); margin: 0; }
+.graph-header { background: #1a1a2e; color: white; padding: 12px 30px; display: flex; align-items: center; gap: 20px; }
+.graph-header h1 { font-size: 20px; font-weight: 500; }
+.graph-header .stats { font-size: 13px; color: #a0a0c0; }
+.graph-controls { padding: 10px 30px; background: white; border-bottom: 1px solid #e0e0e0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.graph-controls label { font-size: 13px; color: #666; }
+.graph-controls select { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+.graph-controls .sep { width: 1px; height: 20px; background: #ddd; }
+.edge-btn { padding: 4px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; cursor: pointer; background: #f0f0f0; }
+.edge-btn.active { background: #1976D2; color: white; border-color: #1976D2; }
+.graph-body { position: relative; flex: 1; min-height: 0; }
+#cy { width: 100%; height: 100%; }
+/* Detail panel floats above the graph as an overlay; does not steal width */
+#detail { position: absolute; top: 16px; right: 16px; bottom: 16px; width: 0; background: white; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,0.15); padding: 0; overflow-y: auto; font-size: 13px; line-height: 1.6; transition: width 0.18s ease; z-index: 20; }
+#detail.open { width: 420px; padding: 18px; }
+#detail > * { display: none; }
+#detail.open > * { display: revert; }
+#detail h3 { margin: 0 0 6px; font-size: 16px; }
+#detail .meta { color: #888; font-size: 12px; margin-bottom: 8px; }
+#detail .summary { margin-bottom: 10px; padding: 6px 10px; background: #f0f7ff; border-radius: 4px; border-left: 3px solid #1976D2; font-size: 13px; }
+#detail .close-btn { position: absolute; top: 8px; right: 12px; cursor: pointer; font-size: 18px; color: #999; }
+#detail .close-btn:hover { color: #333; }
+.reading-link { display: inline-block; margin: 8px 0; padding: 4px 12px; background: #e3f2fd; color: #1976D2; border-radius: 4px; font-size: 13px; font-weight: 500; text-decoration: none; }
+.reading-link:hover { background: #bbdefb; text-decoration: none; }
+.legend { position: absolute; bottom: 20px; right: 20px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-size: 11px; z-index: 10; }
+.legend-title { font-weight: 600; margin-bottom: 4px; font-size: 12px; }
+.legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.legend-line { display: inline-block; width: 18px; height: 0; vertical-align: middle; }
+.bm-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 4px 0; }
+.bm-table th { background: #f5f5f5; text-align: left; padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 11px; }
+.bm-table td { padding: 3px 6px; border-bottom: 1px solid #eee; }
+.bm-table .best { font-weight: 700; color: #1976D2; }
+.bm-table .proposed { color: #E65100; font-weight: 600; }
+
+/* ── Mobile (≤768px) ── */
+@media (max-width: 768px) {
+    .graph-page { height: calc(100vh - 52px); }
+    .graph-header { padding: 10px 14px; }
+    .graph-header h1 { font-size: 16px; }
+    .graph-header .stats { font-size: 11px; }
+    /* Controls: horizontal scroll instead of wrap */
+    .graph-controls {
+        padding: 8px 12px; gap: 6px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .graph-controls label { font-size: 11px; flex-shrink: 0; }
+    .graph-controls select,
+    .graph-controls .dropdown-btn,
+    .graph-controls .edge-btn,
+    .graph-controls .filter-confirm-btn {
+        flex-shrink: 0; font-size: 12px; padding: 6px 8px;
+    }
+    .graph-controls .sep { display: none; }
+    /* Advanced options panel stacks vertically */
+    #advFilters { padding: 10px 14px; }
+    #advFilters > div {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+    /* Detail panel: slide-up bottom sheet */
+    #detail {
+        position: fixed !important;
+        top: auto !important; right: 0 !important;
+        bottom: 0 !important; left: 0 !important;
+        width: 100% !important; max-width: none !important;
+        max-height: 65vh;
+        border-radius: 12px 12px 0 0;
+        border: none; border-top: 1px solid #e0e0e0;
+        transform: translateY(100%);
+        transition: transform 0.22s ease, padding 0s;
+        z-index: 100;
+    }
+    #detail.open {
+        transform: translateY(0);
+        padding: 16px 16px 24px !important;
+        width: 100% !important;
+    }
+    #detail .close-btn { top: 10px; right: 14px; font-size: 22px; padding: 4px 8px; }
+    /* Legend: hide on mobile (too much real estate) */
+    .legend { display: none; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="graph-page">
+    <div class="graph-header">
+        <h1>模型迭代图</h1>
+        <div class="stats" id="graphStats"></div>
+    </div>
+    <div class="graph-controls">
+        <label>类别:</label>
+        <div class="dropdown-multi" id="catDd">
+            <div class="dropdown-btn" onclick="toggleDd('catDd')">全部 ▾</div>
+            <div class="dropdown-menu" id="catMenu"></div>
+        </div>
+        <div class="sep"></div>
+        <label>公司:</label>
+        <div class="dropdown-multi" id="coDd">
+            <div class="dropdown-btn" onclick="toggleDd('coDd')">全部 ▾</div>
+            <div class="dropdown-menu" id="coMenu"></div>
+        </div>
+        <div class="sep"></div>
+        <label>标签:</label>
+        <div class="dropdown-multi" id="tagDd">
+            <div class="dropdown-btn" onclick="toggleDd('tagDd')" style="min-width:160px">全部 ▾</div>
+            <div class="dropdown-menu" id="tagMenu"></div>
+        </div>
+        <div class="sep"></div>
+        <label>数据集:</label>
+        <select id="dsFilter"><option value="all">全部</option></select>
+        <div class="sep"></div>
+        <button class="filter-confirm-btn" onclick="applyFilters()">确定</button>
+        <div class="sep"></div>
+        <label>定位:</label>
+        <input type="text" id="graphSearch" list="graphSearchList"
+               class="search-input"
+               placeholder="模型名…"
+               autocomplete="off"
+               style="width: 150px; font-size: 13px;"
+               oninput="onGraphSearchInput()">
+        <datalist id="graphSearchList"></datalist>
+        <div class="sep"></div>
+        <button class="edge-btn" id="btnAdv" onclick="toggleAdvanced()">高级选项 ▾</button>
+    </div>
+    <div id="advFilters" style="display:none;padding:10px 30px;background:#f9f9fb;border-bottom:1px solid #e0e0e0;font-size:13px;">
+        <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;">
+            <label style="display:flex;align-items:center;gap:6px;color:#555;">
+                最少连接过滤:
+                <input type="number" id="minDegree" value="2" min="0" max="20" style="width:54px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px;" onchange="applyFilters()">
+            </label>
+            <span style="color:#555;">应用范围:</span>
+            <label style="display:flex;align-items:center;gap:4px;color:#555;">
+                <input type="checkbox" id="filterUnread" checked onchange="applyFilters()"> 仅引用模型
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;color:#555;">
+                <input type="checkbox" id="filterRead" onchange="applyFilters()"> 精读模型
+            </label>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-top:8px;">
+            <label style="display:flex;align-items:center;gap:6px;color:#555;">
+                过滤模式:
+                <select id="filterMode" onchange="applyFilters()" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+                    <option value="dim" selected>淡化其他节点</option>
+                    <option value="neighborhood">仅保留+引用节点</option>
+                </select>
+            </label>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-top:8px;">
+            <label style="display:flex;align-items:center;gap:4px;color:#555;">
+                <input type="checkbox" id="transitiveReduce" checked onchange="toggleTransitiveReduce()"> 过滤冗余边
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;color:#555;">
+                <input type="checkbox" id="showCite" onchange="toggleCite()"> 显示论文引用边
+            </label>
+        </div>
+    </div>
+    <div class="graph-body" style="position:relative;">
+        <div id="cy"></div>
+        <div id="detail"></div>
+        <div class="legend">
+            <div class="legend-title">类别</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#e3f2fd;border:2px solid #1976D2"></div> 生成式</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#FFF3E0;border:2px solid #E65100"></div> 判别式</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f3e5f5;border:2px solid #7B1FA2"></div> LLM</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#e0f2f1;border:2px solid #00796B"></div> 其他</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#fafafa;border:2px dashed #bbb"></div> 未精读</div>
+            <div class="legend-title" style="margin-top:6px;">来源</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#e3f2fd;border:4px solid #1976D2"></div> 工业界</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#e3f2fd;border:1.5px solid #1976D2"></div> 学术</div>
+            <div class="legend-title" style="margin-top:6px;">模型比较</div>
+            <div class="legend-item"><div class="legend-line" style="border-top:2px solid #4CAF50"></div> 自报优势</div>
+            <div class="legend-item"><div class="legend-line" style="border-top:2px solid #FF9800"></div> 第三方报告</div>
+            <div class="legend-item"><div class="legend-line" style="border-top:2px solid #f44336"></div> 存在冲突</div>
+            <div class="legend-title" style="margin-top:6px;">论文引用</div>
+            <div class="legend-item"><div class="legend-line" style="border-top:2px dashed #9C27B0"></div> 引用关系</div>
+            <div class="legend-title" style="margin-top:6px;">选中节点</div>
+            <div class="legend-item"><div class="legend-line" style="border-top:3px solid #B0413E"></div> 出边</div>
+            <div class="legend-item"><div class="legend-line" style="border-top:3px solid #5D8C5A"></div> 入边</div>
+        </div>
+    </div>
+</div>
+
+<script>
+let cy, DATA;
+// Comparison edges are always shown; cite edges are an optional overlay.
+let layers = {comp: true, cite: false};
+let focusedNode = null;
+
+const CAT_COLORS = {
+    'generative-rec':     {bg:'#e3f2fd', bd:'#1976D2', fg:'#1976D2'},
+    'discriminative-rec': {bg:'#FFF3E0', bd:'#E65100', fg:'#E65100'},
+    'llm':                {bg:'#f3e5f5', bd:'#7B1FA2', fg:'#7B1FA2'},
+    'other':              {bg:'#e0f2f1', bd:'#00796B', fg:'#00796B'},
+};
+const DEFAULT_COLOR = {bg:'#e0f2f1', bd:'#00796B', fg:'#00796B'};
+const UNREAD_COLOR  = {bg:'#fafafa', bd:'#bbb', fg:'#999'};
+
+function toggleAdvanced() {
+    var p = document.getElementById('advFilters');
+    var b = document.getElementById('btnAdv');
+    if (p.style.display === 'none' || p.style.display === '') {
+        p.style.display = 'block';
+        b.textContent = '高级选项 ▴';
+    } else {
+        p.style.display = 'none';
+        b.textContent = '高级选项 ▾';
+    }
+    // Container size/position changed — Cytoscape's cached offset is stale,
+    // which causes clicks to land below the cursor until the next interaction.
+    if (cy) setTimeout(function() { cy.resize(); }, 50);
+}
+
+async function init() {
+    try {
+        DATA = await fetch('/graph/data.json').then(r => r.json());
+    } catch(e) { console.error('Failed to load graph data:', e); return; }
+
+    const g = DATA.graph;
+    document.getElementById('graphStats').textContent =
+        Object.keys(g.nodes).length + ' 个模型 · ' + g.edges.length + ' 条比较 · ' +
+        (g.citations||[]).length + ' 条引用 · 更新于 ' + DATA.last_updated;
+
+    // Populate dataset filter
+    var dsSel = document.getElementById('dsFilter');
+    DATA.datasets.forEach(function(ds) {
+        var o = document.createElement('option'); o.value = ds; o.textContent = ds;
+        dsSel.appendChild(o);
+    });
+
+    // Populate multi-selects
+    var catLabels = {'generative-rec':'生成式', 'discriminative-rec':'判别式', 'llm':'LLM', 'other':'其他'};
+    buildMultiMenu('catMenu', 'catDd', DATA.categories.map(function(c) {
+        return {value: c, label: catLabels[c] || c};
+    }));
+    buildMultiMenu('coMenu', 'coDd', DATA.companies.map(function(c) { return {value: c, label: c}; }));
+
+    // Tags: grouped multi-select (task / method / scene)
+    var tagItems = [];
+    var tg = DATA.tag_groups || {};
+    Object.keys(tg).forEach(function(group) {
+        tagItems.push({group: group});
+        (tg[group] || []).forEach(function(t) { tagItems.push({value: t, label: t}); });
+    });
+    buildMultiMenu('tagMenu', 'tagDd', tagItems);
+
+    // Populate the search datalist with all node names
+    var searchDl = document.getElementById('graphSearchList');
+    if (searchDl) {
+        Object.keys(DATA.graph.nodes).sort().forEach(function(name) {
+            var opt = document.createElement('option');
+            opt.value = name;
+            searchDl.appendChild(opt);
+        });
+    }
+
+    buildGraph();
+
+    // Auto-focus node from ?focus= URL param after layout settles
+    var params = new URLSearchParams(window.location.search);
+    var focusParam = params.get('focus');
+    if (focusParam && cy) {
+        cy.ready(function() {
+            document.getElementById('graphSearch').value = focusParam;
+            onGraphSearchInput();
+        });
+    }
+}
+
+function onGraphSearchInput() {
+    if (!cy) return;
+    var raw = (document.getElementById('graphSearch').value || '').trim();
+    if (!raw) {
+        clearFocus();
+        closeDetail();
+        return;
+    }
+    // Try exact id match first, then case-insensitive fallback
+    var match = cy.getElementById(raw);
+    if (!match || !match.length) {
+        var lower = raw.toLowerCase();
+        match = cy.nodes().filter(function(n) { return n.id().toLowerCase() === lower; });
+    }
+    if (!match || !match.length) return;  // unknown name — noop
+    focusedNode = match.id();
+    cy.animate({ center: { eles: match }, zoom: Math.max(cy.zoom(), 1) }, { duration: 200 });
+    applyFocus();
+    showNodeDetail(focusedNode);
+    openDetail();
+}
+
+function buildMultiMenu(menuId, ddId, items) {
+    var menu = document.getElementById(menuId);
+    var html = '<div class="dropdown-actions"><a onclick="ddCheckAll(\'' + menuId + '\')">全选</a> <a onclick="ddClearAll(\'' + menuId + '\')">清空</a></div>';
+    items.forEach(function(it) {
+        if (it.group) {
+            html += '<div class="dropdown-group-label">' + it.group + '</div>';
+            return;
+        }
+        html += '<label class="dropdown-item"><input type="checkbox" checked value="' + it.value + '" data-label="' + it.label.replace(/"/g, '&quot;') + '" onchange="updateDdLabel(\'' + ddId + '\')"> ' + it.label + '</label>';
+    });
+    menu.innerHTML = html;
+    updateDdLabel(ddId);
+}
+
+function updateDdLabel(ddId) {
+    var dd = document.getElementById(ddId);
+    if (!dd) return;
+    var btn = dd.querySelector('.dropdown-btn');
+    var inputs = dd.querySelectorAll('input[type="checkbox"]');
+    var checked = Array.from(inputs).filter(function(cb) { return cb.checked; });
+    var total = inputs.length;
+    var text;
+    if (checked.length === total) text = '全部';
+    else if (checked.length === 0) text = '无';
+    else if (checked.length === 1) text = checked[0].getAttribute('data-label') || checked[0].value;
+    else text = checked.length + '/' + total;
+    btn.textContent = text + ' ▾';
+}
+
+function toggleDd(id) {
+    var dd = document.getElementById(id);
+    dd.classList.toggle('open');
+    document.querySelectorAll('.dropdown-multi').forEach(function(d) { if (d.id !== id) d.classList.remove('open'); });
+}
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dropdown-multi')) {
+        document.querySelectorAll('.dropdown-multi').forEach(function(d) { d.classList.remove('open'); });
+    }
+});
+
+function ddGetChecked(menuId) { return Array.from(document.querySelectorAll('#' + menuId + ' input:checked')).map(function(cb) { return cb.value; }); }
+function ddGetTotal(menuId) { return document.querySelectorAll('#' + menuId + ' input').length; }
+function ddCheckAll(menuId) {
+    document.querySelectorAll('#' + menuId + ' input').forEach(function(cb) { cb.checked = true; });
+    var dd = document.querySelector('#' + menuId).closest('.dropdown-multi');
+    if (dd) updateDdLabel(dd.id);
+}
+function ddClearAll(menuId) {
+    document.querySelectorAll('#' + menuId + ' input').forEach(function(cb) { cb.checked = false; });
+    var dd = document.querySelector('#' + menuId).closest('.dropdown-multi');
+    if (dd) updateDdLabel(dd.id);
+}
+
+function buildGraph() {
+    if (cy) { cy.destroy(); cy = null; }
+    var g = DATA.graph;
+    var elements = [];
+
+    // Build edge conflict lookup
+    var edgeKeys = {};
+    g.edges.forEach(function(e) {
+        var k = [e.source, e.target].sort().join('|');
+        edgeKeys[k] = (edgeKeys[k] || 0) + 1;
+    });
+
+    // Add nodes with color data
+    Object.keys(g.nodes).forEach(function(name) {
+        var n = g.nodes[name];
+        var cat = n.category || '';
+        var col;
+        var bdStyle = 'solid';
+        if (n.is_unread) {
+            col = UNREAD_COLOR;
+            bdStyle = 'dashed';
+        } else {
+            col = CAT_COLORS[cat] || DEFAULT_COLOR;
+        }
+        var isIndustry = !!n.company;
+        // Industry papers get a thicker border to stand out
+        var baseBd = n.is_proposed ? 3 : 2;
+        var bdWidth = isIndustry ? baseBd + 2.5 : baseBd;
+        elements.push({
+            group: 'nodes',
+            data: {
+                id: name,
+                label: name,
+                bgColor: col.bg,
+                bdColor: col.bd,
+                fgColor: col.fg,
+                bdStyle: bdStyle,
+                bdWidth: bdWidth,
+                fontSize: n.is_proposed ? 30 : 24,
+                fontWeight: n.is_proposed ? 700 : 500,
+            },
+        });
+    });
+
+    // Add comparison edges (skip if source/target node missing or transitively redundant)
+    var nodeSet = g.nodes;
+    var reduce = document.getElementById('transitiveReduce').checked;
+    var redundant = reduce ? computeRedundantEdges() : new Set();
+    g.edges.forEach(function(e, i) {
+        if (!nodeSet[e.source] || !nodeSet[e.target]) return;
+        if (redundant.has(i)) return;
+        var k = [e.source, e.target].sort().join('|');
+        var conflict = edgeKeys[k] > 1;
+        elements.push({
+            group: 'edges',
+            data: {
+                id: 'comp_' + i,
+                source: e.source,
+                target: e.target,
+                edgeType: 'comp',
+                eColor: conflict ? '#f44336' : e.is_self_reported ? '#4CAF50' : '#FF9800',
+                edgeDatasets: Object.keys(e.datasets || {}).join(','),
+                _index: i,
+            },
+        });
+    });
+
+    // Add citation edges (skip if source/target node missing)
+    (g.citations || []).forEach(function(c, i) {
+        if (!nodeSet[c.source] || !nodeSet[c.target]) return;
+        elements.push({
+            group: 'edges',
+            data: {
+                id: 'cite_' + i,
+                source: c.source,
+                target: c.target,
+                edgeType: 'cite',
+            },
+        });
+    });
+
+    cy = cytoscape({
+        container: document.getElementById('cy'),
+        elements: elements,
+        style: [
+            {
+                selector: 'node',
+                style: {
+                    'label': 'data(label)',
+                    'shape': 'roundrectangle',
+                    'width': 'label',
+                    'height': 64,
+                    'padding': '22px',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'color': 'data(fgColor)',
+                    'font-size': 'data(fontSize)',
+                    'font-weight': 'data(fontWeight)',
+                    'border-style': 'data(bdStyle)',
+                    'background-color': 'data(bgColor)',
+                    'border-color': 'data(bdColor)',
+                    'border-width': 'data(bdWidth)',
+                }
+            },
+            {
+                selector: 'edge[edgeType="comp"]',
+                style: {
+                    'width': 2,
+                    'line-color': 'data(eColor)',
+                    'target-arrow-color': 'data(eColor)',
+                    'target-arrow-shape': 'triangle',
+                    'arrow-scale': 1.6,
+                    'curve-style': 'bezier',
+                    'opacity': 0.7,
+                }
+            },
+            {
+                selector: 'edge[edgeType="cite"]',
+                style: {
+                    'width': 1.2,
+                    'line-color': '#CE93D8',
+                    'line-style': 'dashed',
+                    'target-arrow-color': '#9C27B0',
+                    'target-arrow-shape': 'triangle',
+                    'arrow-scale': 1.2,
+                    'curve-style': 'bezier',
+                    'opacity': 0,
+                }
+            }
+        ],
+        layout: { name: 'dagre', rankDir: 'LR', nodeSep: 32, rankSep: 130, edgeSep: 14, fit: false, animate: false },
+        wheelSensitivity: 0.3,
+        // Allow aggressive zoom-out so the whole graph fits on small phones
+        minZoom: 0.05,
+        maxZoom: 3,
+        // Force a high pixelRatio so canvas text is rendered at >1× and stays
+        // crisp even after pan/zoom. 'auto' uses devicePixelRatio which on
+        // many displays is 1, leaving text fuzzy compared to DOM.
+        pixelRatio: Math.max(2, window.devicePixelRatio || 1),
+        textureOnViewport: false,  // disable downsampling during pan/zoom
+        motionBlur: false,
+        hideEdgesOnViewport: false,
+        hideLabelsOnViewport: false,
+    });
+    // Default view: desktop uses zoom 1 (text crisp, user pans freely).
+    // Mobile (≤768px) needs the whole graph to fit or it's unusable —
+    // call cy.fit() so all visible nodes pack into the viewport.
+    if (window.innerWidth <= 768) {
+        cy.fit(null, 20);
+    } else {
+        cy.zoom(1);
+        cy.center();
+    }
+
+    // Event handlers
+    cy.on('tap', 'node', function(evt) {
+        focusedNode = evt.target.id();
+        applyFocus();
+        showNodeDetail(evt.target.id());
+    });
+
+    cy.on('tap', 'edge[edgeType="comp"]', function(evt) {
+        var idx = evt.target.data('_index');
+        if (idx != null) showEdgeDetail(DATA.graph.edges[idx]);
+    });
+
+    cy.on('tap', function(evt) {
+        if (evt.target === cy) {
+            clearFocus();
+            closeDetail();
+        }
+    });
+
+    // Keep Cytoscape's coordinate cache in sync with container changes.
+    // Store refs so buildGraph() can clean them up before recreating cy.
+    if (window._cyResizeHandler) window.removeEventListener('resize', window._cyResizeHandler);
+    if (window._cyResizeObserver) window._cyResizeObserver.disconnect();
+    window._cyResizeHandler = function() { cy.resize(); };
+    window.addEventListener('resize', window._cyResizeHandler);
+    if (window.ResizeObserver) {
+        window._cyResizeObserver = new ResizeObserver(function() { cy.resize(); });
+        window._cyResizeObserver.observe(document.getElementById('cy'));
+    }
+
+    // Save the original (full-graph) positions so we can restore them when
+    // switching back from "neighborhood" filter mode (which re-runs layout
+    // on the visible subset and would otherwise leave nodes piled up).
+    // dagre with animate:false runs synchronously, so positions are already
+    // final by the time cytoscape() returns — capture them now.
+    cy.nodes().forEach(function(n) {
+        var p = n.position();
+        n.data('origX', p.x);
+        n.data('origY', p.y);
+    });
+
+    // Apply default degree filter
+    applyFilters();
+}
+
+function showNodeDetail(nodeId) {
+    var n = DATA.graph.nodes[nodeId];
+    if (!n) return;
+    var panel = document.getElementById('detail');
+    var hasMetadata = (n.authors && n.authors.length) || n.summary;
+
+    var html = '<span class="close-btn" onclick="closeDetail()">&times;</span>';
+    html += '<h3>' + n.model_name;
+    if (n.score) html += ' <span style="background:#fff8e1;color:#f57f17;font-size:12px;padding:1px 6px;border-radius:3px;">⭐ ' + n.score + '</span>';
+    html += '</h3>';
+
+    if (n.paper_id) {
+        var link = n.arxiv_url ? '<a href="' + n.arxiv_url + '" target="_blank" style="color:#1976D2">arxiv ↗</a>' : '';
+        var paradigm = n.category === 'generative-rec' ? ' · <span style="color:#1976D2">生成式</span>' :
+                       n.category === 'discriminative-rec' ? ' · <span style="color:#E65100">判别式</span>' :
+                       n.category === 'llm' ? ' · <span style="color:#7B1FA2">LLM</span>' :
+                       n.category === 'other' ? ' · <span style="color:#00796B">其他</span>' : '';
+        html += '<div class="meta">' + link + paradigm + '</div>';
+    }
+    if (n.paper_title) html += '<div style="font-size:13px;color:#333;margin-bottom:6px;font-weight:500;">' + n.paper_title + '</div>';
+    if (hasMetadata) {
+        if (n.authors && n.authors.length) html += '<div style="font-size:12px;color:#666;margin-bottom:2px;">👤 ' + n.authors.join(', ') + '</div>';
+        if (n.affiliations && n.affiliations.length) html += '<div style="font-size:12px;color:#888;margin-bottom:6px;">🏛 ' + n.affiliations.join(', ') + '</div>';
+        if (n.summary) html += '<div class="summary">' + n.summary + '</div>';
+    }
+
+    // Reading link
+    var readUrl = n.reading_url || (DATA.reading_urls && DATA.reading_urls[n.paper_id]) || '';
+    if (readUrl) html += '<a href="' + readUrl + '" class="reading-link">📖 阅读精读报告 →</a>';
+
+    // Benchmark tables — skip entirely on mobile (too much vertical space)
+    var isMobile = window.innerWidth <= 768;
+    var dsNames = isMobile ? [] : Object.keys(DATA.benchmarks || {}).sort();
+    dsNames.forEach(function(ds) {
+        var entries = DATA.benchmarks[ds];
+        var paperEntries = entries.filter(function(e) { return e.paper_id === n.paper_id; });
+        if (!paperEntries.length) return;
+        var metrics = [];
+        var metricSet = {};
+        paperEntries.forEach(function(e) { Object.keys(e.metrics).forEach(function(m) { if (!metricSet[m]) { metricSet[m]=1; metrics.push(m); } }); });
+        if (!metrics.length) return;
+        var best = {};
+        metrics.forEach(function(m) { var vals = paperEntries.map(function(e){return e.metrics[m]}).filter(function(v){return v!=null}); if(vals.length) best[m]=Math.max.apply(null,vals); });
+        html += '<div style="margin-top:8px"><div style="font-weight:600;font-size:13px;color:#1976D2;">' + ds + '</div>';
+        html += '<table class="bm-table"><tr><th>#</th><th>Model</th>';
+        metrics.forEach(function(m) { html += '<th>' + m + '</th>'; });
+        html += '</tr>';
+        paperEntries.sort(function(a,b) { return (b.metrics[metrics[0]]||0) - (a.metrics[metrics[0]]||0); });
+        paperEntries.forEach(function(e, i) {
+            var label = e.is_proposed_model ? '<span class="proposed">' + e.model + ' ★</span>' : e.model;
+            html += '<tr><td>' + (i+1) + '</td><td>' + label + '</td>';
+            metrics.forEach(function(m) {
+                var v = e.metrics[m];
+                var isBest = v != null && Math.abs(v - best[m]) < 1e-6;
+                html += '<td>' + (v != null ? (isBest ? '<span class="best">' + v.toFixed(4) + '</span>' : v.toFixed(4)) : '') + '</td>';
+            });
+            html += '</tr>';
+        });
+        html += '</table></div>';
+    });
+
+    panel.innerHTML = html;
+    openDetail();
+}
+
+function showEdgeDetail(e) {
+    if (!e) return;
+    var panel = document.getElementById('detail');
+    var html = '<span class="close-btn" onclick="closeDetail()">&times;</span>';
+    html += '<h3>' + e.source + ' → ' + e.target + '</h3>';
+    var pidMap = DATA.pid_to_model || {};
+    var sourceLabel = pidMap[e.paper_id] || e.paper_id;
+    var sourceLink = e.paper_id ? '<a href="https://arxiv.org/abs/' + e.paper_id + '" target="_blank" style="color:#1976D2">' + sourceLabel + '</a>' : sourceLabel;
+    html += '<div class="meta">数据来源: ' + sourceLink + ' · ' + (e.is_self_reported ? '自报' : '第三方') + '</div>';
+    if (e.summary) html += '<div class="summary">' + e.summary + '</div>';
+    var datasets = e.datasets || {};
+    Object.keys(datasets).forEach(function(ds) {
+        html += '<div style="margin-top:6px"><div style="font-weight:600;font-size:13px;color:#1976D2;">' + ds + '</div>';
+        html += '<div style="color:#555;font-size:12px;">' + datasets[ds] + '</div></div>';
+    });
+    panel.innerHTML = html;
+    openDetail();
+}
+
+function openDetail() {
+    document.getElementById('detail').classList.add('open');
+}
+
+function closeDetail() {
+    document.getElementById('detail').classList.remove('open');
+    clearFocus();
+}
+
+function applyFocus() {
+    if (!focusedNode || !cy) return;
+    var node = cy.getElementById(focusedNode);
+    if (!node.length) return;
+    cy.batch(function() {
+        // Dim everything (slightly visible — not fully ghosted)
+        cy.elements().style('opacity', 0.22);
+        // Highlight node + neighborhood (nodes only — edges handled below)
+        var nbrs = node.neighborhood().nodes().add(node);
+        nbrs.style('opacity', 1);
+        // Only highlight edges of currently visible types
+        var typeFilter = '';
+        if (layers.comp && layers.cite) typeFilter = '';
+        else if (layers.comp) typeFilter = '[edgeType="comp"]';
+        else if (layers.cite) typeFilter = '[edgeType="cite"]';
+        else return;
+        var outgoing = node.outgoers('edge' + typeFilter);
+        var incoming = node.incomers('edge' + typeFilter);
+        outgoing.style({
+            'line-color': '#B0413E',
+            'target-arrow-color': '#B0413E',
+            'width': 3.2,
+            'opacity': 1,
+        });
+        incoming.style({
+            'line-color': '#5D8C5A',
+            'target-arrow-color': '#5D8C5A',
+            'width': 3.2,
+            'opacity': 1,
+        });
+    });
+}
+
+function clearFocus() {
+    focusedNode = null;
+    if (!cy) return;
+    cy.batch(function() {
+        // Reset edge colors back to data-bound values
+        cy.edges('[edgeType="comp"]').removeStyle('line-color target-arrow-color width opacity');
+        cy.edges('[edgeType="cite"]').removeStyle('line-color target-arrow-color width opacity');
+        cy.elements().style('opacity', '');
+        updateEdgeVisibility();
+    });
+    applyFilters();
+}
+
+// Compute the set of redundant edge indices via transitive reduction.
+// An edge A→C is redundant if a path A→...→C of length ≥2 exists
+// through other comp edges.
+var _redundantEdges = null;
+function computeRedundantEdges() {
+    if (_redundantEdges) return _redundantEdges;
+    _redundantEdges = new Set();
+    var g = DATA.graph;
+    var adj = {};
+    g.edges.forEach(function(e) {
+        if (!adj[e.source]) adj[e.source] = new Set();
+        adj[e.source].add(e.target);
+    });
+    g.edges.forEach(function(e, i) {
+        var src = e.source, tgt = e.target;
+        var visited = new Set([src]);
+        var queue = [];
+        (adj[src] || new Set()).forEach(function(nb) {
+            if (nb !== tgt) { queue.push(nb); visited.add(nb); }
+        });
+        var found = false;
+        while (queue.length > 0 && !found) {
+            var cur = queue.shift();
+            (adj[cur] || new Set()).forEach(function(nb) {
+                if (nb === tgt) { found = true; return; }
+                if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
+            });
+        }
+        if (found) _redundantEdges.add(i);
+    });
+    return _redundantEdges;
+}
+
+function toggleTransitiveReduce() {
+    _redundantEdges = null;
+    buildGraph();
+}
+
+function updateEdgeVisibility() {
+    cy.batch(function() {
+        cy.edges('[edgeType="comp"]').style('opacity', layers.comp ? 0.5 : 0);
+        cy.edges('[edgeType="cite"]').style('opacity', layers.cite ? 0.5 : 0);
+    });
+}
+
+function toggleCite() {
+    layers.cite = document.getElementById('showCite').checked;
+    updateEdgeVisibility();
+}
+
+function computeDegrees() {
+    var deg = {};
+    var g = DATA.graph;
+    Object.keys(g.nodes).forEach(function(n) { deg[n] = 0; });
+    g.edges.forEach(function(e) {
+        if (deg[e.source] != null) deg[e.source]++;
+        if (deg[e.target] != null) deg[e.target]++;
+    });
+    return deg;
+}
+
+function applyFilters() {
+    if (!cy) return;
+    var ds = document.getElementById('dsFilter').value;
+    var cats = ddGetChecked('catMenu');
+    var cos = ddGetChecked('coMenu');
+    var tags = ddGetChecked('tagMenu');
+    var allCats = cats.length === ddGetTotal('catMenu');
+    var allCos = cos.length === ddGetTotal('coMenu');
+    var allTags = tags.length === ddGetTotal('tagMenu');
+    var minDeg = parseInt(document.getElementById('minDegree').value || '0', 10);
+    var filterUnread = document.getElementById('filterUnread').checked;
+    var filterRead = document.getElementById('filterRead').checked;
+    var mode = document.getElementById('filterMode').value;
+    var degs = computeDegrees();
+    var DIM = 0.12;
+
+    // Hard-filter set: nodes hidden by min-degree (always display:none,
+    // independent of filter mode). cat/co filter is the soft layer that
+    // honours the filter mode (dim or neighborhood).
+    var hiddenByDeg = {};
+    var matchSet = {};
+    Object.keys(DATA.graph.nodes).forEach(function(name) {
+        var nd = DATA.graph.nodes[name];
+        var applyMinDeg = nd.is_unread ? filterUnread : filterRead;
+        if (applyMinDeg && (degs[name] || 0) < minDeg) {
+            hiddenByDeg[name] = true;
+            return;
+        }
+        var catOk = allCats || (nd.category && cats.indexOf(nd.category) >= 0);
+        var coOk = allCos || (nd.company && cos.indexOf(nd.company) >= 0);
+        var ndTags = nd.tags || [];
+        var tagOk = allTags || ndTags.some(function(t) { return tags.indexOf(t) >= 0; });
+        if (catOk && coOk && tagOk) matchSet[name] = true;
+    });
+
+    cy.batch(function() {
+        // Reset previous filter styling
+        cy.nodes().removeStyle('display opacity');
+        cy.edges().removeStyle('display opacity');
+
+        // Filter edges by dataset (independent of node filter)
+        cy.edges('[edgeType="comp"]').forEach(function(e) {
+            var eDs = (e.data('edgeDatasets') || '').split(',');
+            var dsOk = ds === 'all' || eDs.indexOf(ds) >= 0;
+            e.style('display', dsOk && layers.comp ? 'element' : 'none');
+        });
+
+        // Always hide degree-filtered nodes regardless of mode
+        cy.nodes().forEach(function(n) {
+            if (hiddenByDeg[n.id()]) n.style('display', 'none');
+        });
+
+        if (mode === 'dim') {
+            // Mode A: dim cat/co non-matches, keep layout intact.
+            // Restore original positions in case we just came back from
+            // neighborhood mode (which re-layouted on a subset).
+            cy.nodes().forEach(function(n) {
+                if (hiddenByDeg[n.id()]) return;
+                var ox = n.data('origX'), oy = n.data('origY');
+                if (ox != null && oy != null) n.position({x: ox, y: oy});
+                n.style('display', 'element');
+                var inMatch = !!matchSet[n.id()];
+                n.style('opacity', inMatch ? 1 : DIM);
+            });
+            cy.edges('[edgeType="comp"]').forEach(function(e) {
+                var s = e.source().id(), t = e.target().id();
+                if (hiddenByDeg[s] || hiddenByDeg[t]) { e.style('display', 'none'); return; }
+                var both = matchSet[s] && matchSet[t];
+                e.style('opacity', both ? 0.7 : DIM);
+            });
+            cy.fit(null, 30);
+        } else {
+            // Mode B: keep matched + their referenced (incomers via comp);
+            // referenced (non-matched) nodes are dimmed. Degree-hidden
+            // nodes never appear, even as references.
+            var visible = {};
+            var dimmed = {};
+            Object.keys(matchSet).forEach(function(id) { visible[id] = true; });
+            Object.keys(matchSet).forEach(function(id) {
+                var n = cy.getElementById(id);
+                if (!n.length) return;
+                n.incomers('edge[edgeType="comp"]').sources().forEach(function(src) {
+                    var sid = src.id();
+                    if (hiddenByDeg[sid]) return;
+                    if (!visible[sid]) { visible[sid] = true; dimmed[sid] = true; }
+                });
+            });
+            cy.nodes().forEach(function(n) {
+                var id = n.id();
+                if (hiddenByDeg[id]) return;  // already hidden above
+                if (!visible[id]) {
+                    n.style('display', 'none');
+                } else {
+                    n.style('display', 'element');
+                    n.style('opacity', dimmed[id] ? DIM : 1);
+                }
+            });
+            cy.edges('[edgeType="comp"]').forEach(function(e) {
+                var s = e.source().id(), t = e.target().id();
+                if (hiddenByDeg[s] || hiddenByDeg[t] || !visible[s] || !visible[t]) {
+                    e.style('display', 'none');
+                    return;
+                }
+                var bothMatch = matchSet[s] && matchSet[t];
+                e.style('opacity', bothMatch ? 0.7 : DIM);
+            });
+            // Re-run layout in this mode since hidden nodes change topology
+            cy.layout({ name: 'dagre', rankDir: 'LR', nodeSep: 24, rankSep: 95, edgeSep: 10, animate: false }).run();
+        }
+    });
+}
+
+init();
+</script>
+{% endblock %}

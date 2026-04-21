@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+{% block title %}Benchmarks — Archivist{% endblock %}
+{% block content %}
+<div class="benchmark-page">
+    <div class="page-header">
+        <h1>Benchmark 排行榜</h1>
+        <span class="paper-count" id="dsCount"></span>
+    </div>
+
+    <div class="filters bm-filters">
+        <label class="filter-label">模型:</label>
+        <input type="text" id="bmModelSearch" list="bmModelSearchList"
+               class="search-input"
+               placeholder="输入模型名…"
+               autocomplete="off"
+               oninput="onBmModelSearchInput()">
+        <datalist id="bmModelSearchList"></datalist>
+        <label class="filter-label">数据集:</label>
+        <div class="dropdown-multi" id="dsFilter">
+            <div class="dropdown-btn" onclick="toggleDropdown('dsFilter')" style="min-width:140px">全部 ▾</div>
+            <div class="dropdown-menu" id="dsMenu"></div>
+        </div>
+        <label class="filter-label">类别:</label>
+        <div class="dropdown-multi" id="catFilter">
+            <div class="dropdown-btn" onclick="toggleDropdown('catFilter')">全部 ▾</div>
+            <div class="dropdown-menu" id="catMenu"></div>
+        </div>
+        <label class="filter-label">公司:</label>
+        <div class="dropdown-multi" id="coFilter">
+            <div class="dropdown-btn" onclick="toggleDropdown('coFilter')">全部 ▾</div>
+            <div class="dropdown-menu" id="coMenu"></div>
+        </div>
+        <label class="filter-label">标签:</label>
+        <div class="dropdown-multi" id="tagFilter">
+            <div class="dropdown-btn" onclick="toggleDropdown('tagFilter')" style="min-width:160px">全部 ▾</div>
+            <div class="dropdown-menu" id="tagMenu"></div>
+        </div>
+        <button class="filter-confirm-btn" onclick="applyFilters()">确定</button>
+    </div>
+
+    <div id="bm-sections"></div>
+
+    <div id="bm-detail" class="bm-detail-popup" style="display:none;"></div>
+</div>
+
+<style>
+.benchmark-page { max-width: 1100px; }
+.bm-filters { position: sticky; top: 10px; z-index: 50; }
+.bm-section { margin-bottom: 24px; background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden; }
+.bm-section-header { background: #283593; color: white; padding: 12px 20px; font-size: 16px; font-weight: 500; }
+.bm-section-body { padding: 16px 20px; }
+.bm-paradigm-label { font-size: 14px; font-weight: 600; margin: 12px 0 6px; padding-left: 10px; }
+.bm-paradigm-gen { border-left: 3px solid #1976D2; color: #1976D2; }
+.bm-paradigm-disc { border-left: 3px solid #E65100; color: #E65100; }
+.bm-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 12px; }
+.bm-table th { background: #f5f5f5; text-align: left; padding: 6px 8px; border-bottom: 2px solid #ddd; cursor: pointer; user-select: none; white-space: nowrap; font-size: 11px; }
+.bm-table th:hover { background: #e8e8e8; }
+.bm-table th.sort-active { background: #e3f2fd; }
+.bm-table td { padding: 4px 8px; border-bottom: 1px solid #eee; white-space: nowrap; }
+.bm-table tr:hover td { background: #f8f8ff; }
+.bm-table .best { font-weight: 700; color: #1976D2; }
+.bm-table .proposed { color: #E65100; font-weight: 600; }
+.bm-table .baseline-row { color: #bbb; }
+.bm-table .baseline-row td { color: #bbb; }
+.bm-table .model-link { color: #1976D2; cursor: pointer; text-decoration: none; }
+.bm-table .model-link:hover { text-decoration: underline; }
+.bm-table .baseline-row .model-link { color: #ccc; }
+.bm-detail-popup { position: fixed; top: 50%; right: 30px; transform: translateY(-50%); max-width: 420px; max-height: 70vh; overflow-y: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.22); font-size: 13px; line-height: 1.6; z-index: 100; }
+.bm-detail-popup h3 { margin: 0 0 6px; font-size: 16px; }
+.bm-detail-popup .meta { color: #888; font-size: 12px; margin-bottom: 8px; }
+.bm-detail-popup .summary { padding: 6px 10px; background: #f0f7ff; border-left: 3px solid #1976D2; border-radius: 4px; margin-bottom: 8px; }
+.bm-detail-popup .close-btn { position: absolute; top: 8px; right: 12px; cursor: pointer; font-size: 18px; color: #999; }
+.bm-detail-popup .close-btn:hover { color: #333; }
+.reading-link { display: inline-block; margin: 6px 0; padding: 4px 12px; background: #e3f2fd; color: #1976D2; border-radius: 4px; font-size: 13px; font-weight: 500; text-decoration: none; }
+.reading-link:hover { background: #bbdefb; text-decoration: none; }
+
+/* ── Mobile (≤768px) ── */
+@media (max-width: 768px) {
+    .benchmark-page { max-width: none; }
+    /* Filter bar: drop sticky (eats too much vertical space) and rely on base filter rules */
+    .bm-filters { position: static; top: auto; }
+    /* Section headers + bodies tighten up */
+    .bm-section { margin-bottom: 16px; }
+    .bm-section-header { padding: 10px 14px; font-size: 14px; }
+    .bm-section-body { padding: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .bm-paradigm-label { font-size: 13px; margin: 8px 0 4px; }
+    /* Table: let it exceed container width and scroll horizontally */
+    .bm-table { font-size: 11px; min-width: max-content; margin-bottom: 10px; }
+    .bm-table th { padding: 6px 5px; font-size: 10px; }
+    .bm-table td { padding: 4px 5px; }
+    /* Detail popup → bottom sheet */
+    .bm-detail-popup {
+        position: fixed !important;
+        top: auto !important; right: 0 !important;
+        bottom: 0 !important; left: 0 !important;
+        transform: none !important;
+        width: 100%; max-width: none !important;
+        max-height: 75vh;
+        border-radius: 12px 12px 0 0;
+        padding: 16px 16px 24px;
+    }
+    .bm-detail-popup .close-btn { top: 10px; right: 14px; font-size: 22px; padding: 4px 8px; }
+}
+</style>
+
+<script>
+let DATA;
+
+const CAT_LABELS = {'generative-rec':'生成式', 'discriminative-rec':'判别式', 'llm':'LLM', 'other':'其他'};
+
+async function init() {
+    DATA = await fetch('/benchmark/data.json').then(r => r.json());
+    document.getElementById('dsCount').textContent = `${DATA.datasets.length} datasets`;
+
+    // Populate filter dropdowns
+    populateMenu('dsMenu', 'dsFilter', DATA.datasets.map(d => ({value: d.slug, label: d.name})));
+    populateMenu('catMenu', 'catFilter', (DATA.categories || []).map(c => ({value: c, label: CAT_LABELS[c] || c})));
+    populateMenu('coMenu', 'coFilter', (DATA.companies || []).map(c => ({value: c, label: c})));
+    var tagItems = [];
+    var tg = DATA.tag_groups || {};
+    Object.keys(tg).forEach(g => {
+        tagItems.push({group: g});
+        (tg[g] || []).forEach(t => tagItems.push({value: t, label: t}));
+    });
+    populateMenu('tagMenu', 'tagFilter', tagItems);
+
+    // Populate model-name datalist from all unique benchmark entries
+    var modelNames = new Set();
+    DATA.datasets.forEach(ds => ds.entries.forEach(e => {
+        if (e.model) modelNames.add(e.model);
+    }));
+    var bmDl = document.getElementById('bmModelSearchList');
+    if (bmDl) {
+        Array.from(modelNames).sort().forEach(name => {
+            var opt = document.createElement('option');
+            opt.value = name;
+            bmDl.appendChild(opt);
+        });
+    }
+
+    renderAll();
+}
+
+// Model-name search state (lowercased; '' = inactive)
+var _bmModelFilter = '';
+
+function onBmModelSearchInput() {
+    var raw = (document.getElementById('bmModelSearch').value || '').trim();
+    if (!raw) { _bmModelFilter = ''; renderAll(); return; }
+    var lower = raw.toLowerCase();
+    // Accept only exact-match to a real model name in the dataset
+    var found = false;
+    for (var i = 0; i < DATA.datasets.length && !found; i++) {
+        var ds = DATA.datasets[i];
+        for (var j = 0; j < ds.entries.length; j++) {
+            if ((ds.entries[j].model || '').toLowerCase() === lower) { found = true; break; }
+        }
+    }
+    if (!found) return;
+    _bmModelFilter = lower;
+    renderAll();
+}
+
+function populateMenu(menuId, ddId, items) {
+    var menu = document.getElementById(menuId);
+    var html = '<div class="dropdown-actions"><a onclick="ddCheckAll(\'' + menuId + '\',\'' + ddId + '\')">全选</a> <a onclick="ddClearAll(\'' + menuId + '\',\'' + ddId + '\')">清空</a></div>';
+    items.forEach(it => {
+        if (it.group) { html += '<div class="dropdown-group-label">' + it.group + '</div>'; return; }
+        html += '<label class="dropdown-item"><input type="checkbox" checked value="' + it.value + '" data-label="' + (it.label || '').replace(/"/g,'&quot;') + '" onchange="updateDdLabel(\'' + ddId + '\')"> ' + it.label + '</label>';
+    });
+    menu.innerHTML = html;
+    updateDdLabel(ddId);
+}
+
+function ddGetChecked(menuId) { return Array.from(document.querySelectorAll('#' + menuId + ' input:checked')).map(c => c.value); }
+function ddGetTotal(menuId) { return document.querySelectorAll('#' + menuId + ' input').length; }
+function ddCheckAll(menuId, ddId) {
+    document.querySelectorAll('#' + menuId + ' input').forEach(c => c.checked = true);
+    updateDdLabel(ddId);
+}
+function ddClearAll(menuId, ddId) {
+    document.querySelectorAll('#' + menuId + ' input').forEach(c => c.checked = false);
+    updateDdLabel(ddId);
+}
+function updateDdLabel(ddId) {
+    var dd = document.getElementById(ddId);
+    if (!dd) return;
+    var btn = dd.querySelector('.dropdown-btn');
+    var inputs = dd.querySelectorAll('input[type="checkbox"]');
+    var checked = Array.from(inputs).filter(cb => cb.checked);
+    var total = inputs.length;
+    var text;
+    if (checked.length === total) text = '全部';
+    else if (checked.length === 0) text = '无';
+    else if (checked.length === 1) text = checked[0].getAttribute('data-label') || checked[0].value;
+    else text = checked.length + '/' + total;
+    btn.textContent = text + ' ▾';
+}
+function toggleDropdown(id) {
+    var dd = document.getElementById(id);
+    dd.classList.toggle('open');
+    document.querySelectorAll('.dropdown-multi').forEach(d => { if (d.id !== id) d.classList.remove('open'); });
+}
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dropdown-multi')) {
+        document.querySelectorAll('.dropdown-multi').forEach(d => d.classList.remove('open'));
+    }
+});
+
+function applyFilters() { renderAll(); }
+
+function renderAll() {
+    var dsSlugs = ddGetChecked('dsMenu');
+    var cats = ddGetChecked('catMenu');
+    var cos = ddGetChecked('coMenu');
+    var tags = ddGetChecked('tagMenu');
+    var allCats = cats.length === ddGetTotal('catMenu');
+    var allCos = cos.length === ddGetTotal('coMenu');
+    var allTags = tags.length === ddGetTotal('tagMenu');
+    var allDs = dsSlugs.length === ddGetTotal('dsMenu');
+
+    var container = document.getElementById('bm-sections');
+    var html = '';
+    var tblCnt = 0;
+    var visibleDs = 0;
+
+    DATA.datasets.forEach(ds => {
+        if (!allDs && dsSlugs.indexOf(ds.slug) < 0) return;
+        // Model-name search: skip dataset entirely if it has no entry for this model
+        if (_bmModelFilter) {
+            var hasModel = ds.entries.some(e => (e.model || '').toLowerCase() === _bmModelFilter);
+            if (!hasModel) return;
+        }
+        // Apply entry-level filters (cat / company / tags)
+        var filteredEntries = ds.entries.filter(e => {
+            var catOk = allCats || (e.category && cats.indexOf(e.category) >= 0);
+            var coOk = allCos || (e.company && cos.indexOf(e.company) >= 0);
+            var tagOk = allTags || (e.tags || []).some(t => tags.indexOf(t) >= 0);
+            return catOk && coOk && tagOk;
+        });
+        if (!filteredEntries.length) return;
+
+        var gen = filteredEntries.filter(e => e.paradigm === 'generative');
+        var disc = filteredEntries.filter(e => e.paradigm === 'discriminative');
+        var other = filteredEntries.filter(e => e.paradigm !== 'generative' && e.paradigm !== 'discriminative');
+
+        html += `<div class="bm-section" id="ds-${ds.slug}">`;
+        html += `<div class="bm-section-header">${ds.name} (${filteredEntries.length} models)</div>`;
+        html += `<div class="bm-section-body">`;
+        if (gen.length) {
+            html += `<div class="bm-paradigm-label bm-paradigm-gen">生成式模型 (${gen.length})</div>`;
+            html += buildTable(gen, ds, 'bmt-' + (tblCnt++));
+        }
+        if (disc.length) {
+            html += `<div class="bm-paradigm-label bm-paradigm-disc">判别式模型 (${disc.length})</div>`;
+            html += buildTable(disc, ds, 'bmt-' + (tblCnt++));
+        }
+        if (other.length) {
+            html += `<div class="bm-paradigm-label" style="color:#00796B">其他 (${other.length})</div>`;
+            html += buildTable(other, ds, 'bmt-' + (tblCnt++));
+        }
+        html += '</div></div>';
+        visibleDs++;
+    });
+
+    if (!visibleDs) html = '<div style="text-align:center;padding:40px;color:#999;">没有匹配的数据集</div>';
+    container.innerHTML = html;
+    document.getElementById('dsCount').textContent = `${visibleDs} datasets`;
+}
+
+function buildTable(entries, ds, tableId) {
+    const metrics = ds.metric_names;
+    const best = ds.best_values;
+    if (!metrics.length) return '';
+
+    // Sort by first metric desc
+    entries.sort((a, b) => (b.metrics[metrics[0]] || 0) - (a.metrics[metrics[0]] || 0));
+
+    let h = `<table class="bm-table" id="${tableId}"><tr><th>#</th><th>Model</th>`;
+    metrics.forEach((m, i) => {
+        const tip = getMetricTooltip(m);
+        h += `<th title="${tip}" onclick="sortTable('${tableId}',${i+2})" style="cursor:pointer">${m} <span class="sort-arrow"></span></th>`;
+    });
+    h += '</tr>';
+
+    entries.forEach((e, i) => {
+        const hasReading = e.reading_url || DATA.reading_urls[e.paper_id];
+        const cls = hasReading ? '' : 'baseline-row';
+        const escapedModel = e.model.replace(/'/g, "\\'");
+        const escapedPaper = (e.paper_id || '').replace(/'/g, "\\'");
+        const escapedDs = ds.name.replace(/'/g, "\\'");
+        const modelHtml = `<a href="#" class="model-link" onclick="event.preventDefault();showDetail('${escapedModel}','${escapedPaper}','${escapedDs}')">${e.model}</a>`;
+        const label = e.is_proposed_model ? `<span class="proposed">${modelHtml} ★</span>` : modelHtml;
+
+        h += `<tr class="${cls}"><td>${i + 1}</td><td>${label}</td>`;
+        metrics.forEach(m => {
+            const v = e.metrics[m];
+            const isBest = v != null && best[m] != null && Math.abs(v - best[m]) < 1e-6;
+            h += `<td>${v != null ? (isBest ? '<span class="best">' + v.toFixed(4) + '</span>' : v.toFixed(4)) : ''}</td>`;
+        });
+        h += '</tr>';
+    });
+    h += '</table>';
+    return h;
+}
+
+function sortTable(tid, col) {
+    const table = document.getElementById(tid);
+    if (!table) return;
+    const rows = Array.from(table.querySelectorAll('tr')).slice(1);
+    const ths = table.querySelectorAll('th');
+    const th = ths[col];
+    const asc = th.classList.contains('sort-active') && table.dataset.sortDir === 'desc';
+    ths.forEach(h => { h.classList.remove('sort-active'); const a = h.querySelector('.sort-arrow'); if(a) a.textContent = ''; });
+    th.classList.add('sort-active');
+    table.dataset.sortDir = asc ? 'asc' : 'desc';
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = asc ? '▲' : '▼';
+
+    rows.sort((a, b) => {
+        const va = parseFloat(a.cells[col]?.textContent) || 0;
+        const vb = parseFloat(b.cells[col]?.textContent) || 0;
+        return asc ? va - vb : vb - va;
+    });
+    rows.forEach((r, i) => { r.cells[0].textContent = i + 1; table.appendChild(r); });
+}
+
+function showDetail(model, paperId, dsName) {
+    const panel = document.getElementById('bm-detail');
+    // Look up the model's *own* paper via the DAG-derived index. If absent,
+    // the model is unread (only referenced as a baseline) — explicitly show
+    // 未收录, do NOT fall back to the citing paper's info.
+    var pidToModel = DATA.pid_to_model || {};
+    var modelIndex = DATA.model_index || {};
+    var info = modelIndex[model];
+    // Variant fallback: rows like "STAMP (T5 L=2)" don't match a graph node
+    // directly. Resolve via the entry's paper_id → canonical model name.
+    if (!info && paperId) {
+        var canonical = pidToModel[paperId];
+        if (canonical) info = modelIndex[canonical];
+    }
+    var hasOriginal = !!info && !!info.reading_url;
+
+    var html = `<span class="close-btn" onclick="this.parentElement.style.display='none'">&times;</span>`;
+    html += `<h3>${model}</h3>`;
+
+    if (hasOriginal) {
+        if (info.paper_title) html += `<div style="font-size:13px;color:#333;margin-bottom:6px;font-weight:500;">${info.paper_title}</div>`;
+        var paradigm = info.paradigm || '';
+        var paradigmTag = paradigm === 'generative' ? '<span class="tag tag-generative-rec">生成式</span>' :
+                          paradigm === 'discriminative' ? '<span class="tag tag-discriminative-rec">判别式</span>' : '';
+        var companyTag = info.company ? `<span class="tag tag-company">${info.company}</span>` : '<span class="tag tag-academic">学术</span>';
+        html += `<div class="meta"><a href="https://arxiv.org/abs/${info.paper_id}" target="_blank" style="color:#1976D2">arxiv ↗</a> ${paradigmTag} ${companyTag}</div>`;
+        if (info.summary) html += `<div class="summary">${info.summary}</div>`;
+        html += `<a href="${info.reading_url}" class="reading-link">📖 阅读精读报告 →</a>`;
+    } else {
+        html += `<div class="meta"><span class="tag tag-academic" style="background:#fff3e0;color:#e65100;border:none">未收录</span></div>`;
+        html += `<div style="color:#888;font-size:12px;margin:6px 0;">该模型仅作为 baseline 出现在其他论文的实验中，原始论文未精读归档。</div>`;
+    }
+
+    // Find the entry in the current dataset to read source_papers
+    var entry = null;
+    if (dsName) {
+        var ds = DATA.datasets.find(d => d.name === dsName);
+        if (ds) entry = ds.entries.find(e => e.model === model);
+    }
+
+    if (entry && entry.source_papers && entry.source_papers.length) {
+        // Proposing paper for THIS model — highlight it in the list
+        var proposingPid = info && info.paper_id ? info.paper_id : null;
+        html += `<div style="margin-top:10px;font-size:12px;color:#555;"><b>实验数据来源:</b><ul style="margin:4px 0 0;padding-left:18px;">`;
+        entry.source_papers.forEach(function(sp) {
+            var label = pidToModel[sp] || sp;
+            var srcInfo = modelIndex[label];
+            var url = srcInfo && srcInfo.reading_url ? srcInfo.reading_url : ('https://arxiv.org/abs/' + sp);
+            var isProposer = sp === proposingPid;
+            var badge = isProposer ? ' <span style="background:#fff8e1;color:#f57f17;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;">原作者</span>' : '';
+            var weight = isProposer ? 'font-weight:600;' : '';
+            html += `<li style="${weight}"><a href="${url}" target="_blank" style="color:#1976D2;">${label}</a>${badge}</li>`;
+        });
+        html += `</ul></div>`;
+    }
+
+    // Conflict info — compact, only shown when relative diff > 10%
+    if (dsName) {
+        var dsKey = dsName.toLowerCase();
+        var dsConflicts = (DATA.conflicts || {})[dsKey];
+        var modelConflicts = dsConflicts && dsConflicts[model];
+        if (modelConflicts && modelConflicts.length) {
+            html += `<div style="margin-top:10px;font-size:12px;background:#fff3e0;border-left:3px solid #e65100;padding:8px 10px;border-radius:4px;color:#5d4037;">`;
+            html += `<b style="color:#e65100;">⚠ 存在冲突</b>`;
+            modelConflicts.forEach(function(c) {
+                // Pick the metric with the largest relative gap as the headline
+                var top = c.diffs.slice().sort(function(a,b){return b.rel-a.rel})[0];
+                var pct = (top.rel * 100).toFixed(1);
+                html += `<div style="margin-top:4px;">${c.existing_label} 与 ${c.new_label} 报告不一致：${top.metric} ${top.existing.toFixed(4)} vs ${top.new.toFixed(4)} (差异 ${pct}%)。采用 ${c.kept} 的数据。</div>`;
+            });
+            html += `</div>`;
+        }
+    }
+
+    panel.innerHTML = html;
+    panel.style.display = 'block';
+}
+
+const metricDesc = {
+    'HR': 'Hit Rate', 'NDCG': 'Normalized DCG', 'Recall': 'Recall',
+    'AUC': 'Area Under ROC Curve', 'MRR': 'Mean Reciprocal Rank',
+    'MAP': 'Mean Average Precision', 'BLEU': 'BLEU Score',
+    'BERTScore': 'BERTScore', 'ROUGE': 'ROUGE Score', 'LogLoss': 'Log Loss',
+};
+function getMetricTooltip(m) {
+    for (const [k, v] of Object.entries(metricDesc)) {
+        if (m.startsWith(k)) return `${v} — ${m}`;
+    }
+    return m;
+}
+
+init();
+</script>
+{% endblock %}

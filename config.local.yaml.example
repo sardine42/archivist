@@ -1,0 +1,22 @@
+# Copy this file to config.local.yaml and fill in your own values.
+# config.local.yaml is gitignored and deep-merges over config.yaml at runtime.
+# Omit any section you don't use — empty values disable the feature.
+
+site:
+  # Public URL where the deployed site is served (used to absolutize
+  # relative links in Lark push messages). Leave empty to disable.
+  base_url: ""
+
+deploy:
+  # SSH target for `archivist deploy`. Format: user@host
+  # Leave empty to disable; pass --host to override per-invocation.
+  host: ""
+  # Remote paths (tilde expansion happens on the remote shell, NOT locally).
+  remote_site_path: "~/site"
+  remote_archive_path: "~/archive"
+
+lark:
+  # Open ID of the Lark user that receives digest notifications + pinned
+  # messages. Discover with: lark-cli contact +get-user
+  # Leave empty to disable Lark push entirely.
+  notify_user_id: ""

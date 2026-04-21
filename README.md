@@ -40,6 +40,136 @@ $EDITOR config.local.yaml        # 按需填入；留空等于禁用对应功能
 `config.yaml` 是框架默认配置（关键词、公司列表、标签、打分权重等），受 Git 管理；
 `config.local.yaml` 是 gitignored 的个人覆盖层，`load_config()` 运行时 deep-merge 到 `config.yaml` 上。
 
+只做本地阅读不需要其他配置。需要生成静态网站并公开访问、或定时推送日报时才参考下方部署指南。
+
+## 部署指南
+
+按需启用以下三个模块：**静态网站 → 飞书推送 → cron 自动化**。三者独立，可分别跳过。
+
+### 模块 A：静态网站（可选）
+
+`archivist deploy` 做两件事：本地 `archivist build` → `_site/`，然后 rsync `_site/` 和 `archive/papers/` 到远程 host。
+
+#### A.1 远程服务器准备
+
+一台带公网 IP 的 Linux 机器，安装 nginx：
+
+```bash
+sudo apt install nginx rsync
+```
+
+建两个目录供 rsync 写入：
+
+```bash
+mkdir -p ~/site ~/archive/papers     # 对应 remote_site_path / remote_archive_path
+```
+
+`/etc/nginx/sites-available/archivist` 参考配置（把 `/reading/<year>/<slug>/figures/` 别名到 archive 目录，避免把几个 GB 的 figures 重复塞进 `_site/`）：
+
+```nginx
+server {
+    listen 80;
+    server_name example.com;       # 换成你的域名或 _
+    root /path/to/site;
+    index index.html;
+
+    # 把论文 figures 从 archive 目录 alias 出来
+    location ~ ^/reading/(\d+)/([^/]+)/figures/(.*)$ {
+        alias /path/to/archive/papers/$1/$2/figures/$3;
+    }
+
+    # 前端使用目录式 URL：/reading/ → /reading/index.html
+    location / {
+        try_files $uri $uri/ $uri/index.html =404;
+    }
+}
+```
+
+启用后 `sudo nginx -t && sudo systemctl reload nginx`。
+
+#### A.2 本地 → 远程 SSH 免密
+
+`deploy` 命令底下直接调 `rsync -e ssh`，必须免密：
+
+```bash
+ssh-copy-id <user>@<host>
+ssh <user>@<host> "echo ok"   # 确认不用输密码
+```
+
+#### A.3 填配置 + 首次部署
+
+`config.local.yaml` 中填入：
+
+```yaml
+site:
+  base_url: "https://your-domain.com"      # 没域名就填 http://<IP>
+deploy:
+  host: "<user>@<host>"
+  remote_site_path: "~/site"                # 默认值，可不改
+  remote_archive_path: "~/archive"
+```
+
+本地验证：
+
+```bash
+.venv/bin/archivist web                    # 本地 8080 预览
+.venv/bin/archivist deploy                 # build + rsync 推到远程
+```
+
+成功后访问 `https://your-domain.com` 应看到论文列表页。
+
+#### A.4 HTTPS（可选）
+
+用 Cloudflare Flexible SSL 是最省事的方案：域名托管到 Cloudflare → 开代理 → SSL/TLS 设为 "Flexible"。nginx 仍然监听 80 端口，对外是 https。
+
+### 模块 B：飞书推送（可选）
+
+日报/周报/月报跑完后会把 markdown 发到指定飞书 DM 并 Pin。**需要自行配置 `lark-cli`**——这是一个独立的命令行工具，用来调飞书 Open API。
+
+1. 按 `lark-cli` 官方流程初始化应用（创建应用、配 scope、登录授权）
+2. 用 `lark-cli contact +get-user` 拿到要接收通知的用户 open_id（以 `ou_` 开头）
+3. 填入 `config.local.yaml`：
+   ```yaml
+   lark:
+     notify_user_id: "ou_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   ```
+4. 测试：`.venv/bin/archivist notify --text "hello"` 应收到飞书消息
+
+留空则日报 Pipeline Step 5 静默跳过，不影响 build/deploy。
+
+### 模块 C：cron 自动化（可选）
+
+`scripts/cron/crontab.txt` 是模板。替换 `/path/to/archivist/` 为你的项目根路径，然后安装：
+
+```bash
+# 把 /path/to/archivist/ 替换成绝对路径
+sed "s|/path/to/archivist|$PWD|g" scripts/cron/crontab.txt | crontab -
+crontab -l     # 验证
+```
+
+三个任务（Asia/Shanghai）：
+
+```cron
+0 9  * * 2-6  .../scripts/cron/daily-digest.sh     # 周二~六 09:00
+30 9 * * 2    .../scripts/cron/weekly-digest.sh    # 周二 09:30（上周周报）
+0 10 1 * *    .../scripts/cron/monthly-digest.sh   # 每月 1 号 10:00
+```
+
+每个 wrapper 脚本：
+- `flock` 拿 `/tmp/archivist-digest.lock` 互斥锁（日报非阻塞，周/月报等 1 小时）
+- 调 `.venv/bin/archivist digest run*`
+- 按 exit code 0 / 75 / 其他 发送飞书通知（复用模块 B）
+
+**WSL 注意**：WSL 在 Windows 休眠时 cron 停摆，需要开 Windows 任务计划程序让 WSL 常驻，或把 archivist 跑在真正的 Linux 机器上。
+
+### 最小化运行（不部署）
+
+只想本地跑 `digest run` 把结果存到 `archive/`，不发布网站、不推飞书、不用 cron：
+
+- `config.local.yaml` 三个字段全部留空
+- 跑 `archivist digest run` — pipeline 会在 Step 5 (push) / Step 6 (deploy) 静默跳过
+- 结果落在 `archive/papers/` + `archive/digests/`，用 `archivist web` 本地预览
+
 ## 存储布局
 
 **整个 `archive/` 都是运行时数据 + 个人数据，不受 Git 管理**（仅框架代码进 git）。目录结构如下：

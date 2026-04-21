@@ -806,8 +806,13 @@ def deploy_site(output: str, host: str | None, skip_build: bool):
 def notify_lark(text: str):
     """Send a plain-text notification to the configured Lark user.
 
-    Used by cron wrappers to report job status.
+    Used by cron wrappers to report job status. Silently no-ops when
+    lark.notify_user_id is unset (minimal-install mode).
     """
+    from archivist.config import get_lark_user_id
+    if not get_lark_user_id():
+        click.echo("(notify skipped: lark.notify_user_id not configured)")
+        return
     from archivist.services.lark_push import LarkPushError, send_text_notification
     try:
         msg_id = send_text_notification(text)

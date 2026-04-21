@@ -27,6 +27,8 @@ from archivist.config import (
     ARCHIVE_ROOT,
     PAPERS_BRIEF_DIR,
     PAPERS_DIR,
+    get_deploy_settings,
+    get_lark_user_id,
     load_config,
 )
 
@@ -283,12 +285,18 @@ def _push(period: str, period_id: str, paper_count: int) -> None:
     if paper_count == 0:
         log.info("  empty digest — skipping Lark push to avoid noise")
         return
+    if not get_lark_user_id():
+        log.info("  lark.notify_user_id not configured — skipping push")
+        return
     msg_id = push_digest_to_lark(period, period_id)
     log.info(f"  sent + pinned: {msg_id}")
 
 
 @_step("Step 6 — build + deploy")
 def _deploy() -> None:
+    if not get_deploy_settings()["host"]:
+        log.info("  deploy.host not configured — skipping build + deploy")
+        return
     venv_archivist = BASE_DIR / ".venv" / "bin" / "archivist"
     proc = subprocess.run(
         [str(venv_archivist), "deploy"],

@@ -175,8 +175,8 @@ def _score_candidates(candidates: list) -> list[dict]:
     cand_dicts = candidates_to_json(candidates)
     prompt = _build_score_prompt(cand_dicts)
 
-    log.info(f"  invoking claude -p (sonnet) on {len(cand_dicts)} candidates…")
-    result = run_claude_json(prompt, model="sonnet", retries=1)
+    log.info(f"  invoking claude -p on {len(cand_dicts)} candidates…")
+    result = run_claude_json(prompt, retries=1)
     if not isinstance(result, list):
         raise ClaudeRunnerError(
             f"score result must be a JSON array, got {type(result).__name__}"
@@ -240,7 +240,7 @@ def _deep_read_top_k(candidates: list, score_results: list[dict]) -> list[str]:
         prompt = f'/read-paper {arxiv_id} --title "{title}"'
         try:
             log.info(f"  → /read-paper {arxiv_id}")
-            run_claude(prompt, model="opus", timeout=3600)
+            run_claude(prompt, timeout=3600)
             succeeded.append(arxiv_id)
         except Exception as e:
             log.error(f"  /read-paper {arxiv_id} FAILED: {e}")
@@ -262,8 +262,8 @@ def _generate_theme(period: str, period_id: str, prepare_data: dict) -> dict:
         prepare_json=json.dumps(prepare_data, ensure_ascii=False, indent=2),
     )
 
-    log.info(f"  invoking claude -p (sonnet) for {period} theme…")
-    result = run_claude_json(prompt, model="sonnet", retries=1)
+    log.info(f"  invoking claude -p for {period} theme…")
+    result = run_claude_json(prompt, retries=1)
     if not isinstance(result, dict):
         raise ClaudeRunnerError(
             f"theme result must be a JSON object, got {type(result).__name__}"

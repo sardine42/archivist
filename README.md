@@ -247,9 +247,9 @@ archivist
 ```
 archivist digest run
    ├─ Step 1: archivist arxiv fetch                            [pure code]
-   ├─ Step 2: claude -p (sonnet) 评分 + 中英摘要                [LLM]
+   ├─ Step 2: claude -p (opus) 评分 + 中英摘要                  [LLM]
    ├─ Step 3: claude -p "/read-paper <id>" (opus) × N          [LLM]
-   ├─ Step 4: digest daily-prepare → claude -p (sonnet) 综述 → daily-write [LLM]
+   ├─ Step 4: digest daily-prepare → claude -p (opus) 综述 → daily-write [LLM]
    ├─ Step 5: lark-cli 推送日报 + Pin                          [pure code]
    └─ Step 6: archivist deploy                                  [pure code]
 ```

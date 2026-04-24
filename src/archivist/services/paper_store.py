@@ -14,7 +14,7 @@ def import_paper(
     pdf_path: Path,
     title: str | None = None,
     tags: list[str] | None = None,
-    category: str = "other",
+    category: list[str] | str | None = None,
 ) -> PaperMeta:
     """Import a PDF paper into the archive.
 
@@ -63,6 +63,13 @@ def import_paper(
     if pdf_meta["keywords"]:
         keywords = [k.strip() for k in pdf_meta["keywords"].split(",") if k.strip()]
 
+    if category is None:
+        cat_list = ["other"]
+    elif isinstance(category, str):
+        cat_list = [category] if category else ["other"]
+    else:
+        cat_list = list(category) or ["other"]
+
     meta = PaperMeta(
         id=generate_id(),
         title=title,
@@ -71,7 +78,7 @@ def import_paper(
         authors=authors,
         source_filename=pdf_path.name,
         tags=tags or [],
-        category=category,
+        category=cat_list,
         keywords=keywords,
     )
     write_json(paper_dir / "meta.json", meta.to_dict())
@@ -101,7 +108,7 @@ def list_papers(
                 continue
             if status and paper.read_status != status:
                 continue
-            if category and paper.category != category:
+            if category and category not in paper.category:
                 continue
             papers.append(paper)
 

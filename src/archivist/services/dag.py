@@ -38,16 +38,17 @@ def save_graph(graph: ModelGraph) -> None:
 
 def add_node(
     graph: ModelGraph, name: str, paper_id: str = "", paper_title: str = "",
-    description: str = "", paradigm: str = "",
+    description: str = "", category: list[str] | None = None,
 ) -> None:
     """Add a model node to the graph (or update if exists)."""
+    cat = list(category or [])
     if name not in graph.nodes:
         graph.nodes[name] = DAGNode(
             model_name=name,
             paper_id=paper_id,
             paper_title=paper_title,
             description=description,
-            paradigm=paradigm,
+            category=cat,
         )
     else:
         node = graph.nodes[name]
@@ -55,8 +56,8 @@ def add_node(
             node.paper_id = paper_id
         if paper_title and not node.paper_title:
             node.paper_title = paper_title
-        if paradigm and not node.paradigm:
-            node.paradigm = paradigm
+        if cat:
+            node.category = sorted(set(node.category) | set(cat))
 
 
 # ── Citations (model A's paper cites model B's paper) ──────
@@ -76,7 +77,7 @@ def add_model_with_citations(
     model_name: str,
     paper_id: str = "",
     paper_title: str = "",
-    paradigm: str = "",
+    category: list[str] | None = None,
     cites_papers: list[str] | None = None,
 ) -> int:
     """Register a model and add citation edges to models whose papers are cited.
@@ -85,12 +86,12 @@ def add_model_with_citations(
         model_name: the model proposed in this paper
         paper_id: arxiv ID
         paper_title: paper title
-        paradigm: "generative" / "discriminative"
+        category: 子集 {"generative-rec", "discriminative-rec"}，通用架构可双值
         cites_papers: list of arxiv IDs cited by this paper
 
     Returns number of new citation edges added.
     """
-    add_node(graph, model_name, paper_id=paper_id, paper_title=paper_title, paradigm=paradigm)
+    add_node(graph, model_name, paper_id=paper_id, paper_title=paper_title, category=category)
 
     # Build paper_id → model_name lookup from existing nodes
     paper_to_model = {n.paper_id: n.model_name for n in graph.nodes.values() if n.paper_id}

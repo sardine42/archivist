@@ -45,12 +45,13 @@ def paper_group():
 @click.argument("pdf", type=click.Path(exists=True, path_type=Path))
 @click.option("--title", "-t", help="Paper title (default: extracted from PDF)")
 @click.option("--tags", help="Comma-separated tags")
-@click.option("--category", "-c", default="other", help="Category: generative-rec / discriminative-rec / llm / other")
+@click.option("--category", "-c", default="other", help="Comma-separated categories: generative-rec / discriminative-rec / llm / other (可多选，如 generative-rec,discriminative-rec)")
 def paper_import(pdf: Path, title: str | None, tags: str | None, category: str):
     """Import a PDF paper into the archive."""
     ensure_archive_dirs()
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
-    meta = paper_store.import_paper(pdf, title=title, tags=tag_list, category=category)
+    cat_list = [c.strip() for c in category.split(",") if c.strip()] or ["other"]
+    meta = paper_store.import_paper(pdf, title=title, tags=tag_list, category=cat_list)
     click.echo(f"Imported: {meta.title}")
     click.echo(f"  slug: {meta.slug}")
     click.echo(f"  year: {meta.year}")
@@ -62,7 +63,7 @@ def paper_import(pdf: Path, title: str | None, tags: str | None, category: str):
 @click.option("--tag", help="Filter by tag")
 @click.option("--year", type=int, help="Filter by year")
 @click.option("--status", help="Filter by read status: unread/reading/read")
-@click.option("--category", "-c", help="Filter by category")
+@click.option("--category", "-c", help="Filter by single category (论文含此 category 即列出)")
 def paper_list(tag: str | None, year: int | None, status: str | None, category: str | None):
     """List papers in the archive."""
     papers = paper_store.list_papers(tag=tag, year=year, status=status, category=category)
@@ -91,9 +92,7 @@ def paper_show(slug: str):
     click.echo(f"Slug:       {paper.slug}")
     click.echo(f"Year:       {paper.year}")
     click.echo(f"Authors:    {', '.join(paper.authors) or '(none)'}")
-    click.echo(f"Category:   {paper.category}")
-    if paper.paradigm:
-        click.echo(f"Paradigm:   {paper.paradigm}")
+    click.echo(f"Category:   {', '.join(paper.category) or '(none)'}")
     click.echo(f"Tags:       {', '.join(paper.tags) or '(none)'}")
     click.echo(f"Status:     {paper.read_status}")
     click.echo(f"Score:      {paper.score} (abstract)")
@@ -122,17 +121,16 @@ def paper_show(slug: str):
 @click.option("--rating-reason", help="Reason/note for the rating (used by /refine-rubric)")
 @click.option("--feedback-consumed/--no-feedback-consumed", default=None,
               help="Mark feedback as processed (avoids re-triggering refine-rubric)")
-@click.option("--category", "-c", help="Set category: generative-rec / discriminative-rec / llm / other")
+@click.option("--category", "-c", help="Set category (comma-separated, 可多选): generative-rec / discriminative-rec / llm / other")
 @click.option("--title", "-t", help="Set title")
 @click.option("--model-name", help="Set model name abbreviation")
 @click.option("--reading-score", type=float, help="Set reading score (1-10)")
-@click.option("--paradigm", help="Set paradigm: generative / discriminative")
 @click.option("--published-date", help="Set published date (YYYY-MM-DD)")
 @click.option("--url", help="Set ArXiv URL")
 def paper_edit(slug: str, tags: str | None, status: str | None, rating: int | None,
                rating_reason: str | None, feedback_consumed: bool | None,
                category: str | None, title: str | None, model_name: str | None,
-               reading_score: float | None, paradigm: str | None,
+               reading_score: float | None,
                published_date: str | None, url: str | None):
     """Edit paper metadata (writes to meta.json).
 
@@ -158,7 +156,8 @@ def paper_edit(slug: str, tags: str | None, status: str | None, rating: int | No
     if feedback_consumed is not None:
         kwargs["feedback_consumed"] = feedback_consumed
     if category is not None:
-        kwargs["category"] = category
+        cat_list = [c.strip() for c in category.split(",") if c.strip()]
+        kwargs["category"] = cat_list or ["other"]
     if title is not None:
         kwargs["title"] = title
     if model_name is not None:
@@ -168,8 +167,6 @@ def paper_edit(slug: str, tags: str | None, status: str | None, rating: int | No
             click.echo("Reading score must be 1-10", err=True)
             sys.exit(1)
         kwargs["reading_score"] = reading_score
-    if paradigm is not None:
-        kwargs["paradigm"] = paradigm
     if published_date is not None:
         kwargs["published_date"] = published_date
     if url is not None:

@@ -20,7 +20,9 @@ class PaperMeta:
     arxiv_id: str | None = None
     source_filename: str = ""
     tags: list[str] = field(default_factory=list)
-    category: str = "other"  # "generative-rec" / "discriminative-rec" / "llm" / "other"
+    category: list[str] = field(default_factory=lambda: ["other"])
+    # 每篇论文可以同时带多个 category，取值集合："generative-rec" / "discriminative-rec" / "llm" / "other"。
+    # 通用架构（如 HSTU）同时适用生成式与判别式时写 ["generative-rec", "discriminative-rec"]。
     one_line_summary: str = ""           # 中文总结（含核心假设、方案、实验结果）
     one_line_summary_en: str = ""        # English summary (hypothesis, method, results)
     keywords: list[str] = field(default_factory=list)
@@ -40,7 +42,6 @@ class PaperMeta:
     published_date: str = ""             # 论文发布日期 (YYYY-MM-DD)
     reading_score: float = 0.0           # 精读评分 (agent 产出, 1-10)
     reading_score_reason: str = ""       # 内部排查用，不展示
-    paradigm: str = ""                   # "generative" / "discriminative"
     url: str = ""                        # ArXiv 链接
     date_added: str = field(default_factory=_now)
     date_modified: str = field(default_factory=_now)
@@ -52,7 +53,14 @@ class PaperMeta:
     def from_dict(cls, data: dict) -> "PaperMeta":
         # Filter to only known fields
         known = {f.name for f in cls.__dataclass_fields__.values()}
-        return cls(**{k: v for k, v in data.items() if k in known})
+        filtered = {k: v for k, v in data.items() if k in known}
+        # Migrate legacy single-value category → list
+        cat = filtered.get("category")
+        if isinstance(cat, str):
+            filtered["category"] = [cat] if cat else ["other"]
+        elif cat is None:
+            filtered["category"] = ["other"]
+        return cls(**filtered)
 
 
 @dataclass
@@ -122,7 +130,8 @@ class DAGNode:
     paper_id: str = ""        # arxiv_id of the paper proposing this model
     paper_title: str = ""     # paper title
     description: str = ""
-    paradigm: str = ""        # "generative" / "discriminative"
+    category: list[str] = field(default_factory=list)
+    # 子集 {"generative-rec", "discriminative-rec"}；通用模型如 HSTU 可同时含两者。
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -171,6 +180,20 @@ class ModelGraph:
             if "first_seen_paper" in v and "paper_id" not in v:
                 v["paper_id"] = v.pop("first_seen_paper")
             v.pop("first_seen_paper", None)
+            # Migrate legacy paradigm str → category list
+            if "paradigm" in v and "category" not in v:
+                p = v.pop("paradigm")
+                if p == "generative":
+                    v["category"] = ["generative-rec"]
+                elif p == "discriminative":
+                    v["category"] = ["discriminative-rec"]
+                else:
+                    v["category"] = []
+            else:
+                v.pop("paradigm", None)
+            cat = v.get("category")
+            if isinstance(cat, str):
+                v["category"] = [cat] if cat else []
             nodes[k] = DAGNode(**{f: v[f] for f in DAGNode.__dataclass_fields__ if f in v})
         raw_edges = []
         for e in data.get("edges", []):

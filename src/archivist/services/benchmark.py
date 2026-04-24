@@ -67,7 +67,7 @@ class BenchmarkEntry:
     model: str
     paper_id: str  # arxiv_id (primary/winning source)
     metrics: dict[str, float]  # {"NDCG@10": 0.053, ...}
-    paradigm: str = ""  # "generative" / "discriminative"
+    category: str = ""  # "generative-rec" / "discriminative-rec"（每条 entry 对应一组实验配置，单值）
     hyperparams: str = ""
     notes: str = ""
     is_proposed_model: bool = False
@@ -252,20 +252,20 @@ def _get_sort_metric(entries: list[BenchmarkEntry]) -> str | None:
 
 
 def _write_leaderboard(filepath: Path, dataset: str, entries: list[BenchmarkEntry]) -> None:
-    """Write the leaderboard as Markdown tables, split by paradigm."""
+    """Write the leaderboard as Markdown tables, split by category."""
     lines = [f"# Benchmark: {dataset}\n"]
 
-    # Group by paradigm
-    paradigm_order = ["generative", "discriminative"]
-    paradigm_labels = {"generative": "生成式模型", "discriminative": "判别式模型"}
+    # Group by category (per-entry single value)
+    category_order = ["generative-rec", "discriminative-rec"]
+    category_labels = {"generative-rec": "生成式模型", "discriminative-rec": "判别式模型"}
     grouped: dict[str, list[BenchmarkEntry]] = {}
     for e in entries:
-        p = e.paradigm or "other"
+        p = e.category or "other"
         grouped.setdefault(p, []).append(e)
 
-    # Write each paradigm as a separate table
-    for paradigm in paradigm_order + [k for k in grouped if k not in paradigm_order]:
-        group = grouped.get(paradigm)
+    # Write each category as a separate table
+    for category in category_order + [k for k in grouped if k not in category_order]:
+        group = grouped.get(category)
         if not group:
             continue
 
@@ -282,7 +282,7 @@ def _write_leaderboard(filepath: Path, dataset: str, entries: list[BenchmarkEntr
                     all_metrics.append(m)
                     seen.add(m)
 
-        label = paradigm_labels.get(paradigm, paradigm)
+        label = category_labels.get(category, category)
         lines.append(f"## {label}\n")
         header = "| Rank | Model | Paper | " + " | ".join(all_metrics) + " | Sources | Hyperparams | Notes |"
         sep = "|" + "|".join(["------"] * (6 + len(all_metrics))) + "|"
@@ -308,24 +308,25 @@ def _write_leaderboard(filepath: Path, dataset: str, entries: list[BenchmarkEntr
 def _parse_leaderboard(filepath: Path) -> list[BenchmarkEntry]:
     """Parse a Markdown leaderboard table back into BenchmarkEntry objects.
 
-    Supports both new format (split by ## paradigm sections) and old single-table format.
+    Supports both new format (split by ## category sections) and old single-table format.
     """
     text = filepath.read_text(encoding="utf-8")
     entries = []
     lines = text.strip().split("\n")
 
-    # Detect paradigm from ## headings
-    paradigm_labels_rev = {"生成式模型": "generative", "判别式模型": "discriminative"}
-    current_paradigm = ""
+    category_labels_rev = {"生成式模型": "generative-rec", "判别式模型": "discriminative-rec"}
+    # 旧 md 里的 Paradigm 列值（"generative"/"discriminative"）在解析时补 -rec 后缀
+    _legacy_value_fix = {"generative": "generative-rec", "discriminative": "discriminative-rec"}
+    current_category = ""
 
     i = 0
     while i < len(lines):
         line = lines[i]
 
-        # Detect paradigm section
+        # Detect category section
         if line.startswith("## "):
             heading = line[3:].strip()
-            current_paradigm = paradigm_labels_rev.get(heading, heading)
+            current_category = category_labels_rev.get(heading, heading)
             i += 1
             continue
 
@@ -360,11 +361,11 @@ def _parse_leaderboard(filepath: Path) -> list[BenchmarkEntry]:
             is_proposed = "★" in cells[1]
 
             if has_paradigm_col:
-                paradigm = cells[2]
+                category = _legacy_value_fix.get(cells[2], cells[2])
                 paper_id = cells[3]
                 metric_offset = 4
             else:
-                paradigm = current_paradigm
+                category = current_category
                 paper_id = cells[2]
                 metric_offset = 3
 
@@ -392,7 +393,7 @@ def _parse_leaderboard(filepath: Path) -> list[BenchmarkEntry]:
                 model=model,
                 paper_id=paper_id,
                 metrics=metrics,
-                paradigm=paradigm,
+                category=category,
                 hyperparams=hyperparams,
                 notes=notes,
                 is_proposed_model=is_proposed,

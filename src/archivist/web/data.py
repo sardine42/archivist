@@ -44,6 +44,15 @@ def _clean_arxiv_id(aid: str) -> str:
     return aid.split("v")[0] if "v" in aid and aid.split("v")[-1].isdigit() else aid
 
 
+def _normalize_cat(value) -> list[str]:
+    """Coerce category value (legacy str or new list) to a list."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value else []
+    return list(value)
+
+
 def _build_reading_urls() -> dict[str, str]:
     """Build arxiv_id -> /reading/<year>/<slug>/ mapping."""
     urls = {}
@@ -127,7 +136,7 @@ def prepare_graph_data(dataset: str | None = None) -> dict:
             node["reading_score"] = meta.get("reading_score", "")
             node["keywords"] = meta.get("keywords", [])
             node["tags"] = meta.get("tags", []) or []
-            node["category"] = meta.get("category", "")
+            node["category"] = _normalize_cat(meta.get("category"))
             node["arxiv_url"] = f"https://arxiv.org/abs/{pid}" if pid else ""
             node["company"] = normalize_company(meta.get("affiliations", []))
             node["reading_url"] = reading_urls.get(pid, "")
@@ -137,7 +146,7 @@ def prepare_graph_data(dataset: str | None = None) -> dict:
     for name, node in graph_data["nodes"].items():
         pid = node.get("paper_id", "")
         if pid not in paper_groups:
-            paper_groups[pid] = {"paper_id": pid, "category": node.get("category", ""), "nodes": [], "title": node.get("paper_title", "")}
+            paper_groups[pid] = {"paper_id": pid, "category": _normalize_cat(node.get("category")), "nodes": [], "title": node.get("paper_title", "")}
         paper_groups[pid]["nodes"].append(name)
 
     # Paper to DAG node
@@ -158,7 +167,7 @@ def prepare_graph_data(dataset: str | None = None) -> dict:
             if not metrics:
                 continue
             ds_entries.append({
-                "model": e.model, "paper_id": e.paper_id, "paradigm": e.paradigm,
+                "model": e.model, "paper_id": e.paper_id, "category": e.category,
                 "metrics": metrics, "is_proposed_model": e.is_proposed_model,
                 "dag_node": paper_to_dag_node.get(e.paper_id, "") if e.is_proposed_model else (e.model if e.model in proposed else ""),
                 "has_reading": e.model in proposed or (e.is_proposed_model and e.paper_id in paper_to_dag_node),
@@ -224,11 +233,11 @@ def prepare_benchmark_data(dataset: str | None = None) -> dict:
             metric_set.update(metrics.keys())
             meta = paper_meta_cache.get(e.paper_id, {})
             processed.append({
-                "model": e.model, "paper_id": e.paper_id, "paradigm": e.paradigm,
+                "model": e.model, "paper_id": e.paper_id, "category": e.category,
                 "metrics": metrics, "is_proposed_model": e.is_proposed_model,
                 "reading_url": reading_urls.get(e.paper_id, ""),
                 "summary": meta.get("one_line_summary", ""),
-                "category": meta.get("category", ""),
+                "paper_category": _normalize_cat(meta.get("category")),
                 "company": normalize_company(meta.get("affiliations", [])) if meta else "",
                 "tags": meta.get("tags", []) or [],
                 # Order: primary (winning) source first, then the rest
@@ -271,12 +280,11 @@ def prepare_benchmark_data(dataset: str | None = None) -> dict:
         meta = paper_meta_cache.get(pid, {})
         if not meta:
             continue
-        cat = meta.get("category", "")
+        cat = _normalize_cat(meta.get("category"))
         model_index[name] = {
             "paper_id": pid,
             "paper_title": node.paper_title or meta.get("title", ""),
-            "paradigm": node.paradigm or ("generative" if cat == "generative-rec" else "discriminative" if cat == "discriminative-rec" else ""),
-            "category": cat,
+            "category": node.category or cat,
             "company": normalize_company(meta.get("affiliations", [])),
             "summary": meta.get("one_line_summary", ""),
             "reading_url": reading_urls.get(pid, ""),

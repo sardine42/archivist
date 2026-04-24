@@ -38,6 +38,16 @@ def _arxiv_version(aid: str) -> int:
     return 1
 
 
+def _coerce_category(value) -> list[str]:
+    """Coerce a category value (str | list | None) to a non-empty list[str]."""
+    if value is None:
+        return ["other"]
+    if isinstance(value, str):
+        return [value] if value else ["other"]
+    out = [c for c in value if c]
+    return out or ["other"]
+
+
 def build_existing_index() -> dict[str, dict]:
     """Build {clean_arxiv_id: {arxiv_id, version, paper_dir, meta}} from archive/papers/."""
     index = {}
@@ -72,7 +82,7 @@ class CandidatePaper:
     paper: RawPaper
     llm_score: float = 0.0        # 1-10, filled by LLM
     llm_reason: str = ""          # LLM's scoring rationale
-    category: str = ""            # "generative-rec" / "llm" / "other", filled by LLM
+    category: list[str] = field(default_factory=list)  # 子集 generative-rec / discriminative-rec / llm / other，filled by LLM
     is_blocked: bool = False
     is_existing: bool = False     # True if same version already in archive
     is_update: bool = False       # True if newer version of an existing paper
@@ -194,7 +204,7 @@ def archive_scored_paper(
         "abstract": paper.abstract,
         "arxiv_id": paper.arxiv_id,
         "tags": list(score_result.get("tags") or []),
-        "category": score_result.get("category", "other"),
+        "category": _coerce_category(score_result.get("category", ["other"])),
         "one_line_summary": score_result.get("summary_zh", ""),
         "one_line_summary_en": score_result.get("summary_en", ""),
         "keywords": list(score_result.get("keywords") or []),
@@ -209,7 +219,6 @@ def archive_scored_paper(
         "published_date": paper.published[:10] if paper.published else "",
         "reading_score": 0.0,
         "reading_score_reason": "",
-        "paradigm": "",
         "url": f"https://arxiv.org/abs/{clean_id}",
         "date_added": now,
         "date_modified": now,
@@ -239,7 +248,7 @@ def candidates_to_json(candidates: list[CandidatePaper]) -> list[dict]:
         # If existing, include the cached score/category from existing meta
         if c.is_existing and c.existing_meta:
             item["score"] = c.existing_meta.get("score", 0)
-            item["category"] = c.existing_meta.get("category", "")
+            item["category"] = _coerce_category(c.existing_meta.get("category", []))
             item["model_name"] = c.existing_meta.get("model_name", "")
             item["reading_score"] = c.existing_meta.get("reading_score", 0)
             item["one_line_summary"] = c.existing_meta.get("one_line_summary", "")

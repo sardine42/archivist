@@ -240,9 +240,9 @@ function renderAll() {
         });
         if (!filteredEntries.length) return;
 
-        var gen = filteredEntries.filter(e => e.paradigm === 'generative');
-        var disc = filteredEntries.filter(e => e.paradigm === 'discriminative');
-        var other = filteredEntries.filter(e => e.paradigm !== 'generative' && e.paradigm !== 'discriminative');
+        var gen = filteredEntries.filter(e => e.category === 'generative-rec');
+        var disc = filteredEntries.filter(e => e.category === 'discriminative-rec');
+        var other = filteredEntries.filter(e => e.category !== 'generative-rec' && e.category !== 'discriminative-rec');
 
         html += `<div class="bm-section" id="ds-${ds.slug}">`;
         html += `<div class="bm-section-header">${ds.name} (${filteredEntries.length} models)</div>`;
@@ -346,9 +346,11 @@ function showDetail(model, paperId, dsName) {
 
     if (hasOriginal) {
         if (info.paper_title) html += `<div style="font-size:13px;color:#333;margin-bottom:6px;font-weight:500;">${info.paper_title}</div>`;
-        var paradigm = info.paradigm || '';
-        var paradigmTag = paradigm === 'generative' ? '<span class="tag tag-generative-rec">生成式</span>' :
-                          paradigm === 'discriminative' ? '<span class="tag tag-discriminative-rec">判别式</span>' : '';
+        var cats = Array.isArray(info.category) ? info.category : (info.category ? [info.category] : []);
+        var _catLabel = {'generative-rec': '生成式', 'discriminative-rec': '判别式', 'llm': 'LLM', 'other': '其他'};
+        var paradigmTag = cats.map(function(c) {
+            return '<span class="tag tag-' + c + '">' + (_catLabel[c] || c) + '</span>';
+        }).join(' ');
         var companyTag = info.company ? `<span class="tag tag-company">${info.company}</span>` : '<span class="tag tag-academic">学术</span>';
         html += `<div class="meta"><a href="https://arxiv.org/abs/${info.paper_id}" target="_blank" style="color:#1976D2">arxiv ↗</a> ${paradigmTag} ${companyTag}</div>`;
         if (info.summary) html += `<div class="summary">${info.summary}</div>`;

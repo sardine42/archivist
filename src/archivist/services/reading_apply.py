@@ -15,13 +15,21 @@ from archivist.services.dag import (
 
 
 _META_FIELDS = [
-    "authors", "affiliations", "category", "paradigm",
+    "authors", "affiliations", "category",
     "score", "score_reason",
     "one_line_summary", "one_line_summary_en",
     "keywords", "tags", "model_name",
     "reading_score", "reading_score_reason",
     "published_date", "generated_by",
 ]
+
+
+def _normalize_category(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value else []
+    return list(value)
 
 
 def apply_reading(data: dict) -> dict:
@@ -39,6 +47,8 @@ def apply_reading(data: dict) -> dict:
         k: v for k, v in data.get("meta", {}).items()
         if k in _META_FIELDS
     }
+    if "category" in meta_updates:
+        meta_updates["category"] = _normalize_category(meta_updates["category"])
     meta_updates["deeply_read"] = True
     meta_updates["read_status"] = "read"
 
@@ -52,7 +62,7 @@ def apply_reading(data: dict) -> dict:
             model=entry["model"],
             paper_id=arxiv_id,
             metrics=entry["metrics"],
-            paradigm=entry.get("paradigm", ""),
+            category=entry.get("category", ""),
             is_proposed_model=entry.get("is_proposed", False),
         ))
         if c:
@@ -70,7 +80,7 @@ def apply_reading(data: dict) -> dict:
             model_name=dag_data["model_name"],
             paper_id=arxiv_id,
             paper_title=dag_data.get("paper_title", ""),
-            paradigm=dag_data.get("paradigm", ""),
+            category=_normalize_category(dag_data.get("category")),
             cites_papers=dag_data.get("cites_papers", []),
         )
         summary["dag_model"] = dag_data["model_name"]

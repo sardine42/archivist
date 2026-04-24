@@ -23,7 +23,7 @@
   "arxiv_id": "1234.56789v1",
   "score": 8,
   "score_reason": "1-2句打分理由，说明为什么给这个分数",
-  "category": "generative-rec | discriminative-rec | llm | other",
+  "category": ["generative-rec"],
   "model_name": "SSR",
   "summary_zh": "中文 1-2 句核心贡献概括",
   "summary_en": "English 1-2 sentence summary",
@@ -43,6 +43,6 @@
    - **task**: sequential-rec, generative-retrieval, ctr-prediction, conversational-rec, cold-start, search-ranking, explainable-rec, ad-rec, multi-business
    - **method**: transformer, moe, rl, contrastive-learning, knowledge-distillation, quantization, semantic-id, llm-based, scaling, diffusion, attention-mechanism, feature-interaction
    - **scene**: industrial, academic
-5. `category` 必须为四选一：`generative-rec` / `discriminative-rec` / `llm` / `other`
+5. `category` 为数组，元素从 `generative-rec` / `discriminative-rec` / `llm` / `other` 中选，至少一项。通用序列建模架构（如 HSTU）既能跑生成式又能跑判别式场景时可双选：`["generative-rec", "discriminative-rec"]`
 6. `model_name` 是论文提出的命名模型（如 SSR、TIGER、HSTU）；如果论文没有命名（综述、benchmark 介绍等），留空字符串
 7. **JSON 字符串安全**：`summary_zh` / `score_reason` 等中文字段里如果要引用术语，**必须用中文双引号 `""`**，不要用 ASCII `"`（否则会破坏 JSON）。若不得不用 ASCII 引号，请转义为 `\"`。

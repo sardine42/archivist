@@ -370,14 +370,15 @@ function buildGraph() {
     // Add nodes with color data
     Object.keys(g.nodes).forEach(function(name) {
         var n = g.nodes[name];
-        var cat = n.category || '';
+        var cats = Array.isArray(n.category) ? n.category : (n.category ? [n.category] : []);
+        var primaryCat = cats[0] || '';
         var col;
         var bdStyle = 'solid';
         if (n.is_unread) {
             col = UNREAD_COLOR;
             bdStyle = 'dashed';
         } else {
-            col = CAT_COLORS[cat] || DEFAULT_COLOR;
+            col = CAT_COLORS[primaryCat] || DEFAULT_COLOR;
         }
         var isIndustry = !!n.company;
         // Industry papers get a thicker border to stand out
@@ -567,10 +568,23 @@ function showNodeDetail(nodeId) {
 
     if (n.paper_id) {
         var link = n.arxiv_url ? '<a href="' + n.arxiv_url + '" target="_blank" style="color:#1976D2">arxiv ↗</a>' : '';
-        var paradigm = n.category === 'generative-rec' ? ' · <span style="color:#1976D2">生成式</span>' :
-                       n.category === 'discriminative-rec' ? ' · <span style="color:#E65100">判别式</span>' :
-                       n.category === 'llm' ? ' · <span style="color:#7B1FA2">LLM</span>' :
-                       n.category === 'other' ? ' · <span style="color:#00796B">其他</span>' : '';
+        var _catColors = {
+            'generative-rec': '#1976D2',
+            'discriminative-rec': '#E65100',
+            'llm': '#7B1FA2',
+            'other': '#00796B',
+        };
+        var _catLabels = {
+            'generative-rec': '生成式',
+            'discriminative-rec': '判别式',
+            'llm': 'LLM',
+            'other': '其他',
+        };
+        var _cats = Array.isArray(n.category) ? n.category : (n.category ? [n.category] : []);
+        var paradigm = _cats.map(function(c) {
+            var color = _catColors[c] || '#666';
+            return ' · <span style="color:' + color + '">' + (_catLabels[c] || c) + '</span>';
+        }).join('');
         html += '<div class="meta">' + link + paradigm + '</div>';
     }
     if (n.paper_title) html += '<div style="font-size:13px;color:#333;margin-bottom:6px;font-weight:500;">' + n.paper_title + '</div>';
@@ -782,7 +796,8 @@ function applyFilters() {
             hiddenByDeg[name] = true;
             return;
         }
-        var catOk = allCats || (nd.category && cats.indexOf(nd.category) >= 0);
+        var ndCats = Array.isArray(nd.category) ? nd.category : (nd.category ? [nd.category] : []);
+        var catOk = allCats || ndCats.some(function(c) { return cats.indexOf(c) >= 0; });
         var coOk = allCos || (nd.company && cos.indexOf(nd.company) >= 0);
         var ndTags = nd.tags || [];
         var tagOk = allTags || ndTags.some(function(t) { return tags.indexOf(t) >= 0; });

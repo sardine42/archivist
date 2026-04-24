@@ -114,13 +114,19 @@ def prepare_daily(date: str) -> dict:
 
             has_reading = (paper_dir / "reading.md").exists()
 
+            raw_cat = m.get("category", ["other"])
+            if isinstance(raw_cat, str):
+                cat_list = [raw_cat] if raw_cat else ["other"]
+            else:
+                cat_list = list(raw_cat) or ["other"]
+
             papers_by_arxiv[arxiv_id] = {
                 "arxiv_id": arxiv_id,
                 "title": m.get("title", ""),
                 "authors": m.get("authors", []),
                 "affiliations": m.get("affiliations", []),
                 "company": _normalize_company(m.get("affiliations", [])),
-                "category": m.get("category", "other"),
+                "category": cat_list,
                 "model_name": m.get("model_name", ""),
                 "tags": m.get("tags", []),
                 "score": m.get("score", 0),
@@ -137,8 +143,8 @@ def prepare_daily(date: str) -> dict:
 
     papers = list(papers_by_arxiv.values())
     for p in papers:
-        cat = p["category"]
-        by_category[cat] = by_category.get(cat, 0) + 1
+        for cat in p["category"]:
+            by_category[cat] = by_category.get(cat, 0) + 1
         if p["deeply_read"]:
             deep_read += 1
         else:
@@ -180,7 +186,7 @@ def write_daily(date: str, agent_data: dict) -> Path:
         period_end=range_end,
         paper_count=stats["total"],
         deeply_read_count=stats["deeply_read"],
-        by_category={cat: [p["arxiv_id"] for p in papers if p["category"] == cat]
+        by_category={cat: [p["arxiv_id"] for p in papers if cat in p["category"]]
                      for cat in stats["by_category"]},
         highlights=agent_data.get("highlights", []),
         theme=agent_data.get("theme", ""),
@@ -242,8 +248,9 @@ def write_daily(date: str, agent_data: dict) -> Path:
             else:
                 model_cell = model
                 title_cell = title
-            cat_label = {"generative-rec": "生成式", "discriminative-rec": "判别式",
-                         "llm": "LLM", "other": "其他"}.get(p["category"], p["category"])
+            _label_map = {"generative-rec": "生成式", "discriminative-rec": "判别式",
+                          "llm": "LLM", "other": "其他"}
+            cat_label = " / ".join(_label_map.get(c, c) for c in p["category"])
             company = f"🏢 {p['company']}" if p["company"] else "🎓 学术"
             rs = f"{p['reading_score']:.0f}" if p["reading_score"] else "—"
             lines.append(f"| {model_cell} | {title_cell} | {cat_label} | {company} | {p['score']:.0f} | {rs} |")
@@ -284,8 +291,9 @@ def _append_paper_block(lines: list, p: dict):
         else:
             lines.append(f"*{title}*")
         lines.append("")
-    cat_label = {"generative-rec": "生成式推荐", "discriminative-rec": "判别式推荐",
-                 "llm": "LLM", "other": "其他"}.get(p["category"], p["category"])
+    _label_map = {"generative-rec": "生成式推荐", "discriminative-rec": "判别式推荐",
+                  "llm": "LLM", "other": "其他"}
+    cat_label = " / ".join(_label_map.get(c, c) for c in p["category"])
     company = f"🏢 {p['company']}" if p["company"] else "🎓 学术"
     lines.append(f"> {company} · {cat_label}")
     lines.append(">")

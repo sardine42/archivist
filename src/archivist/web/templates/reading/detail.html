@@ -29,9 +29,11 @@
         <h1 class="meta-title">{{ paper.title }}</h1>
 
         <div class="meta-row">
-            <span class="tag tag-{{ paper.category }}">
-                {{ "生成式推荐" if paper.category == "generative-rec" else "判别式推荐" if paper.category == "discriminative-rec" else "LLM" if paper.category == "llm" else paper.category }}
+            {% for c in paper.category %}
+            <span class="tag tag-{{ c }}">
+                {{ "生成式推荐" if c == "generative-rec" else "判别式推荐" if c == "discriminative-rec" else "LLM" if c == "llm" else c }}
             </span>
+            {% endfor %}
             {% if company %}
             <span class="tag tag-company">{{ company }}</span>
             {% else %}

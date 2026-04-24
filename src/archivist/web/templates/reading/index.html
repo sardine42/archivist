@@ -178,7 +178,7 @@
         {% set p = item.meta %}
         <div class="paper-card"
              data-slug="{{ p.slug }}"
-             data-category="{{ p.category }}"
+             data-category="{{ p.category | join(',') }}"
              data-company="{{ item.company }}"
              data-tags="{{ p.tags | join(',') }}"
              data-published-date="{{ p.published_date }}"
@@ -188,9 +188,11 @@
              data-rating="{{ p.rating or 0 }}">
             <div class="card-top">
                 <div class="card-tags">
-                    <span class="tag tag-{{ p.category }}">
-                        {{ "生成式" if p.category == "generative-rec" else "判别式" if p.category == "discriminative-rec" else "LLM" if p.category == "llm" else p.category }}
+                    {% for c in p.category %}
+                    <span class="tag tag-{{ c }}">
+                        {{ "生成式" if c == "generative-rec" else "判别式" if c == "discriminative-rec" else "LLM" if c == "llm" else c }}
                     </span>
+                    {% endfor %}
                     {% if item.company %}
                     <span class="tag tag-company">{{ item.company }}</span>
                     {% else %}
@@ -289,11 +291,11 @@ function applyFilters() {
 
     let visible = 0;
     document.querySelectorAll('.paper-card').forEach(card => {
-        const cardCat = card.dataset.category;
+        const cardCats = (card.dataset.category || '').split(',').filter(Boolean);
         const cardCo = card.dataset.company;
         const cardTags = card.dataset.tags.split(',');
 
-        const catOk = allCats || cats.includes(cardCat);
+        const catOk = allCats || cardCats.some(c => cats.includes(c));
         const coOk = allCos || cos.includes(cardCo);
         const tagOk = allTags || cardTags.some(t => tags.includes(t));
 

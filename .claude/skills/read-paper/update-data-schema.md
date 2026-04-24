@@ -9,8 +9,7 @@
   "meta": {
     "authors": ["Author1", "Author2"],
     "affiliations": ["Google Research", "MIT"],
-    "category": "generative-rec",
-    "paradigm": "generative",
+    "category": ["generative-rec"],
     "model_name": "DreamRec",
     "score": 9,
     "reading_score": 8,
@@ -26,14 +25,14 @@
       "dataset": "Amazon-Beauty",
       "model": "DreamRec",
       "metrics": {"NDCG@10": 0.053, "HR@10": 0.089},
-      "paradigm": "generative",
+      "category": "generative-rec",
       "is_proposed": true
     },
     {
       "dataset": "Amazon-Beauty",
       "model": "SASRec",
       "metrics": {"NDCG@10": 0.048, "HR@10": 0.082},
-      "paradigm": "discriminative",
+      "category": "discriminative-rec",
       "is_proposed": false
     }
   ],
@@ -41,7 +40,7 @@
     "model_name": "DreamRec",
     "paper_title": "论文标题",
     "paper_date": "2026-03-01",
-    "paradigm": "generative",
+    "category": ["generative-rec"],
     "cites_papers": ["2302.xxxxx", "2401.yyyyy"],
     "edges": [
       {
@@ -62,8 +61,11 @@
 ## 字段说明
 
 ### meta
-- `category`: **必填**，论文研究方向，`"generative-rec"` / `"discriminative-rec"` / `"llm"` / `"other"`
-- `paradigm`: **必填**，论文提出模型的范式标签，`"generative"` 或 `"discriminative"`。用于迭代图节点着色。详细区分规范见 benchmarks.paradigm 说明
+- `category`: **必填**，论文分类（**数组**），元素从 `"generative-rec"` / `"discriminative-rec"` / `"llm"` / `"other"` 中选，至少一项。
+  - 普通推荐算法论文：`["generative-rec"]` 或 `["discriminative-rec"]`（按输入输出形式判断，详见 `benchmarks[].category` 的判断规范）
+  - 通用序列建模架构论文（典型：**HSTU**）：既能做生成式序列推荐又能做 CTR 判别式排序时，写 `["generative-rec", "discriminative-rec"]`。双 category 会让论文同时出现在两个 tab、两张 benchmark 榜单里
+  - LLM 相关但非推荐：`["llm"]`
+  - 其他：`["other"]`
 - `model_name`: 论文提出的核心模型/方法的缩写名称（如 "DreamRec"、"QuaSID"）。**如果论文不提出新模型结构**（如可复现性研究、综述、工程实践报告），留空 `""`，此时跳过 DAG 注册
 - `score`: 摘要评分（从已有 meta.json 继承，不修改）
 - `reading_score`: **必填**，精读评分 (1-10)，参考 `archive/criteria/reading-criteria.md` 中的精读评分标准
@@ -75,20 +77,20 @@
 - **仅公开学术数据集**（Amazon-Beauty, Movielens-1M 等），不含工业数据集
 - 论文实验表中的**所有模型都要录入**（含 baseline 和本文提出模型的各种变体）
 - 一篇论文可以有多条 benchmark 记录（如消融变体 APAO-Pointwise / APAO-Pairwise，不同骨干 DACT (TIGER) / DACT (LCRec) 等），**benchmark 不需要合并变体**，与 DAG "一篇论文一个节点" 的规则不同
-- `paradigm`: `"generative"` 或 `"discriminative"`，按模型**输入输出形式**区分：
-  - **generative（生成式）**：模型输入是用户行为序列（item ID 序列），输出是下一个 item 或 item 排名。包括：
+- `category`: 单值字符串 `"generative-rec"` 或 `"discriminative-rec"`（每条 entry 对应**一组实验配置**，单值）。按模型**输入输出形式**区分：
+  - **generative-rec（生成式）**：模型输入是用户行为序列（item ID 序列），输出是下一个 item 或 item 排名。包括：
     - 自回归生成式推荐：TIGER、OneRec、P5、LC-Rec
-    - 序列推荐：SASRec、GRU4Rec、BERT4Rec、HSTU、Caser
+    - 序列推荐：SASRec、GRU4Rec、BERT4Rec、Caser
     - 图/对比学习推荐：LightGCN、BM3、CL4SRec、S3-Rec
     - LLM-based 推荐：AgenticRec、TallRec、LLaRA、MLLMRec-R1
     - 对话式推荐：UniCRS、RAR
     - 可解释推荐：SELLER、PETER、PEPLER
     - Tokenizer/SID 方法：RQ-VAE、QuaSID、FORGE
-  - **discriminative（判别式）**：模型输入是用户特征 + 物品特征（稠密/稀疏特征向量），输出是 CTR/CVR 等分值。包括：
+  - **discriminative-rec（判别式）**：模型输入是用户特征 + 物品特征（稠密/稀疏特征向量），输出是 CTR/CVR 等分值。包括：
     - 特征交互排序模型：DCNv2、DLRM、DeepFM、Wukong
     - 工业排序架构：RankMixer、HiFormer、TokenMixer-Large、MixFormer、OneTrans
-    - 序列+特征混合排序：STCA、HSTU（当用于 CTR 排序而非序列推荐时）
-  - **简单判断**：如果论文的实验指标是 Recall@K / NDCG@K / HR@K，通常是 generative；如果是 AUC / LogLoss / UAUC，通常是 discriminative
+  - **通用架构（如 HSTU）同时跑两类实验时**：**提交两条 benchmarks 记录**，分别带 `category: "generative-rec"`（对应 Recall@K / NDCG@K 指标）和 `category: "discriminative-rec"`（对应 AUC / LogLoss 指标）。不要把两种指标合进同一条记录。
+  - **简单判断**：如果论文的实验指标是 Recall@K / NDCG@K / HR@K，通常是 generative-rec；如果是 AUC / LogLoss / UAUC，通常是 discriminative-rec
 - `is_proposed`: 本文提出的模型为 true（含变体）
 
 ### dag

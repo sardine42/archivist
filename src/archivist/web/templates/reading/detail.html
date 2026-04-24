@@ -79,6 +79,14 @@
         </details>
         {% endif %}
 
+        {% if paper.tags %}
+        <div class="meta-tags">
+            {% for t in paper.tags %}
+            <span class="tag-pill">{{ t }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         {% if paper.keywords %}
         <div class="meta-keywords">
             {% for kw in paper.keywords %}

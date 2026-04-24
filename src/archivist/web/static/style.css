@@ -127,6 +127,8 @@ a:hover { text-decoration: underline; }
 .tag-academic::before { content: "🎓 "; }
 
 .keyword-pill { display: inline-block; background: #e8eaf6; color: #3949ab; font-size: 11px; padding: 1px 6px; border-radius: 3px; }
+.tag-pill { display: inline-block; background: #e8f5e9; color: #2e7d32; font-size: 11px; padding: 1px 6px; border-radius: 3px; font-weight: 500; }
+.meta-tags { margin: 8px 0 4px; display: flex; flex-wrap: wrap; gap: 4px; }
 
 /* ── Detail Page ── */
 .detail-page { max-width: 900px; margin: 0 auto; }

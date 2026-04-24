@@ -116,12 +116,7 @@ async function init() {
     populateMenu('dsMenu', 'dsFilter', DATA.datasets.map(d => ({value: d.slug, label: d.name})));
     populateMenu('catMenu', 'catFilter', (DATA.categories || []).map(c => ({value: c, label: CAT_LABELS[c] || c})));
     populateMenu('coMenu', 'coFilter', (DATA.companies || []).map(c => ({value: c, label: c})));
-    var tagItems = [];
-    var tg = DATA.tag_groups || {};
-    Object.keys(tg).forEach(g => {
-        tagItems.push({group: g});
-        (tg[g] || []).forEach(t => tagItems.push({value: t, label: t}));
-    });
+    var tagItems = (DATA.tag_list || []).map(function(t) { return {value: t, label: t}; });
     populateMenu('tagMenu', 'tagFilter', tagItems);
 
     // Populate model-name datalist from all unique benchmark entries

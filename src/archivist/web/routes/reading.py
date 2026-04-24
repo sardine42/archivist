@@ -231,9 +231,8 @@ def paper_list():
     # Default papers view — categories are fixed (always show all 4 types)
     categories = ["generative-rec", "discriminative-rec", "llm", "other"]
     companies = sorted({p["company"] for p in papers if p["company"]})
-    from archivist.config import load_config
-    config = load_config()
-    tag_groups = config.get("tags", {})
+    from archivist.services.tag_registry import load_whitelist
+    tag_list = sorted(load_whitelist())
 
     sort_by = request.args.get("sort", "published_date")
     if sort_by == "reading_score":
@@ -253,7 +252,7 @@ def paper_list():
         papers=papers,
         categories=categories,
         companies=companies,
-        tag_groups=tag_groups,
+        tag_list=tag_list,
         sort_by=sort_by,
         total=len(papers),
         digest_count=digest_count,

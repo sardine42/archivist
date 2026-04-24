@@ -208,11 +208,11 @@ archive/                             # 全部 gitignored
 archivist
 ├── init                                       # 初始化目录结构
 ├── paper
-│   ├── import <pdf> [--tags --category]       # 导入 PDF
+│   ├── import <pdf> [--tags --category --allow-new-tag]   # 导入 PDF（tags 走白名单校验）
 │   ├── list [--tag --year --status --category]
 │   ├── show <slug>
-│   ├── edit <slug> [--rating --rating-reason --feedback-consumed --tags ...]
-│   ├── apply-reading <data.json>              # 精读完成后写 meta + benchmark + DAG
+│   ├── edit <slug> [--rating --rating-reason --feedback-consumed --tags --proposed-tags --allow-new-tag ...]
+│   ├── apply-reading <data.json>              # 精读完成后写 meta + benchmark + DAG（tags 走白名单校验）
 │   ├── backfill -f <field> [--dry-run]        # 列出缺失字段的论文（供 agent 回填）
 │   ├── note <slug>                            # $EDITOR 编辑 notes.md
 │   ├── open <slug>                            # 系统查看器打开 PDF
@@ -234,6 +234,11 @@ archivist
 │   └── list-nodes                             # 列出 DAG 中已注册的模型节点
 ├── rubric
 │   └── list-pending [--format table|json]     # 列出未处理的评分反馈（只读）
+├── tag
+│   ├── list-pending [--threshold N]           # 列 LLM 提案的 proposed_tags（≥N 篇标记 ready-to-promote）
+│   ├── promote <tag> [--gloss "..."]          # 加入 config.yaml 白名单 + 把命中论文的 proposed_tags 迁移到 tags
+│   ├── alias <old> <new>                      # 把 proposed[old] 改写为 tags[new]（处理 LLM 提的同义词）
+│   └── reject <tag>                           # 从所有论文 proposed_tags 中删除该 tag
 ├── build [-o _site]                           # 构建静态网站
 ├── deploy [--host --output --skip-build]      # build + rsync 到远程源站
 ├── web [--host --port --debug]                # 本地预览服务器
@@ -317,6 +322,28 @@ Step 2.5 的"横向语义孪生检索"会在已归档论文中挖掘问题 + 解
    - 多轮对话确认 → Edit 对应 criteria 文件 → `--feedback-consumed` 标记
 
 criteria 与 meta.json 都 gitignored，反馈闭环不产生 git commit。
+
+### Tag 体系与受控演化
+
+`config.yaml` 中的 `tags:` 是一个**扁平白名单**（无维度分组）。每个 tag 满足三条：语义边界清晰（无同义词）、覆盖 ≥3 篇论文（单篇专属概念走 `keywords` 字段）、与 `category` 字段正交（不重复 task 维度信息）。
+
+**写入边界全部走白名单校验**：
+
+- `archivist paper edit --tags`、`paper import --tags`、`paper apply-reading` — 未知 tag 直接报错并提示最相近的 3 个候选；可用 `--allow-new-tag X` 显式放行
+- LLM 自动打 tag（digest pipeline）— 校验后未知 tag 自动落入 `meta.proposed_tags`，**不报错**，给 LLM 一条提案通路
+
+**LLM 提案 → 人工审核入册**：
+
+```bash
+archivist tag list-pending             # 看哪些提案累积了多少篇（≥3 篇会标 [ready to promote]）
+archivist tag promote <tag>            # 加入白名单 + 把所有命中论文的 proposed_tags 迁移到 tags
+archivist tag alias <old> <new>        # 把 proposed[old] 改写为 tags[new]（处理同义词）
+archivist tag reject <tag>             # 噪声 / 单篇专属概念，从所有 proposed_tags 中删除
+```
+
+`promote` 会自动 append 到 `config.yaml` 末尾并重置内存中的 config 缓存，无需重启进程。`config.yaml` 受 Git 管理，所以 promote 的 tag 会跟随 commit 同步给所有用户。
+
+**全量重打** `scripts/retag-papers.py`：用 LLM 读每篇 `reading.md`（不重跑精读流程），按当前白名单输出新 tag。dry-run 出 diff，`--apply` 走 `archivist paper edit` 落库。
 
 ## 项目结构
 

@@ -101,10 +101,9 @@ def build_site(output_dir: Path) -> None:
     # Collect filter options — categories are fixed (always show all 4 types)
     categories = ["generative-rec", "discriminative-rec", "llm", "other"]
     companies = sorted({p["company"] for p in enriched if p["company"]})
-    # Load structured tags from config
-    from archivist.config import load_config
-    config = load_config()
-    tag_groups = config.get("tags", {})
+    # Load flat tag whitelist from config
+    from archivist.services.tag_registry import load_whitelist
+    tag_list = sorted(load_whitelist())
 
     # Build paper lookups for wiki links
     by_arxiv = {}
@@ -144,7 +143,7 @@ def build_site(output_dir: Path) -> None:
         papers=enriched,
         categories=categories,
         companies=companies,
-        tag_groups=tag_groups,
+        tag_list=tag_list,
         sort_by="published_date",
         total=len(enriched),
         digest_count=digest_count,

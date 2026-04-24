@@ -71,6 +71,16 @@ def load_config() -> dict[str, Any]:
     return _CONFIG_CACHE
 
 
+def reload_config() -> None:
+    """Drop the config cache so the next load re-reads from disk.
+
+    Called by `archivist tag promote` after appending a tag, so the
+    in-process whitelist sees the change before the migration step runs.
+    """
+    global _CONFIG_CACHE
+    _CONFIG_CACHE = None
+
+
 def _resolve_archive_root() -> Path:
     cfg = load_config().get("project", {}) or {}
     raw = cfg.get("archive_dir", "archive")

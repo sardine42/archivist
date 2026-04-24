@@ -20,6 +20,8 @@ class PaperMeta:
     arxiv_id: str | None = None
     source_filename: str = ""
     tags: list[str] = field(default_factory=list)
+    proposed_tags: list[str] = field(default_factory=list)
+    # LLM-suggested tags not yet in whitelist; surfaced via `archivist tag list-pending`
     category: list[str] = field(default_factory=lambda: ["other"])
     # 每篇论文可以同时带多个 category，取值集合："generative-rec" / "discriminative-rec" / "llm" / "other"。
     # 通用架构（如 HSTU）同时适用生成式与判别式时写 ["generative-rec", "discriminative-rec"]。

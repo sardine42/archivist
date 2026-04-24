@@ -148,14 +148,11 @@
                     <a onclick="checkAll('tagFilter')">全选</a>
                     <a onclick="clearAll('tagFilter')">清空</a>
                 </div>
-                {% for dim, tags in tag_groups.items() %}
-                <div class="dropdown-group-label">{{ dim }}</div>
-                {% for tag in tags %}
+                {% for tag in tag_list %}
                 <label class="dropdown-item">
                     <input type="checkbox" checked value="{{ tag }}" data-label="{{ tag }}">
                     {{ tag }}
                 </label>
-                {% endfor %}
                 {% endfor %}
             </div>
         </div>

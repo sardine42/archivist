@@ -18,7 +18,7 @@ _META_FIELDS = [
     "authors", "affiliations", "category",
     "score", "score_reason",
     "one_line_summary", "one_line_summary_en",
-    "keywords", "tags", "model_name",
+    "keywords", "tags", "proposed_tags", "model_name",
     "reading_score", "reading_score_reason",
     "published_date", "generated_by",
 ]
@@ -49,6 +49,18 @@ def apply_reading(data: dict) -> dict:
     }
     if "category" in meta_updates:
         meta_updates["category"] = _normalize_category(meta_updates["category"])
+    if "tags" in meta_updates:
+        from archivist.services.tag_registry import suggest_similar, validate_tags
+        valid, unknown = validate_tags(list(meta_updates["tags"] or []))
+        if unknown:
+            hints = "; ".join(
+                f"{t!r}: try {', '.join(suggest_similar(t)) or '(no close match)'}"
+                for t in unknown
+            )
+            raise ValueError(
+                f"apply-reading rejected: unknown tag(s) {unknown}. {hints}"
+            )
+        meta_updates["tags"] = valid
     meta_updates["deeply_read"] = True
     meta_updates["read_status"] = "read"
 

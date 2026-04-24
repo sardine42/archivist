@@ -15,6 +15,7 @@ from pathlib import Path
 
 from archivist.config import load_config, PAPERS_BRIEF_DIR, PAPERS_DIR
 from archivist.services.arxiv_fetch import RawPaper
+from archivist.services.tag_registry import validate_tags
 
 
 def _clean_arxiv_id(aid: str) -> str:
@@ -194,6 +195,16 @@ def archive_scored_paper(
     now = datetime.now(timezone.utc).isoformat()
     paper_id = hashlib.md5(paper.arxiv_id.encode("utf-8")).hexdigest()[:12]
 
+    # Split LLM-emitted tags: known → tags, unknown → proposed_tags (LLM-proposed
+    # additions to the taxonomy, surfaced via `archivist tag list-pending`).
+    raw_tags = list(score_result.get("tags") or [])
+    raw_proposed = list(score_result.get("proposed_tags") or [])
+    valid_from_tags, unknown_from_tags = validate_tags(raw_tags)
+    # If LLM put a known tag into proposed_tags by mistake, promote it back.
+    valid_from_proposed, unknown_from_proposed = validate_tags(raw_proposed)
+    valid_tags = valid_from_tags + [t for t in valid_from_proposed if t not in valid_from_tags]
+    proposed = unknown_from_tags + [t for t in unknown_from_proposed if t not in unknown_from_tags]
+
     meta = {
         "id": paper_id,
         "title": paper.title,
@@ -203,7 +214,8 @@ def archive_scored_paper(
         "affiliations": list(paper.affiliations),
         "abstract": paper.abstract,
         "arxiv_id": paper.arxiv_id,
-        "tags": list(score_result.get("tags") or []),
+        "tags": valid_tags,
+        "proposed_tags": proposed,
         "category": _coerce_category(score_result.get("category", ["other"])),
         "one_line_summary": score_result.get("summary_zh", ""),
         "one_line_summary_en": score_result.get("summary_en", ""),

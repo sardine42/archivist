@@ -19,6 +19,26 @@ from archivist.config import (
 from archivist.services import doc_store, paper_store
 
 
+def _check_tags_or_exit(tag_list: list[str], allow_new: tuple[str, ...]) -> None:
+    """Reject unknown tags unless they're in --allow-new-tag overrides."""
+    from archivist.services.tag_registry import suggest_similar, validate_tags
+    _, unknown = validate_tags(tag_list)
+    really_unknown = [t for t in unknown if t not in allow_new]
+    if not really_unknown:
+        return
+    lines = [f"Unknown tag(s): {', '.join(really_unknown)}"]
+    for t in really_unknown:
+        sims = suggest_similar(t)
+        if sims:
+            lines.append(f"  {t!r}: did you mean {', '.join(sims)}?")
+    lines.append(
+        "Pass --allow-new-tag <tag> to override (use sparingly; prefer "
+        "`archivist tag promote` after the LLM has proposed it)."
+    )
+    click.echo("\n".join(lines), err=True)
+    sys.exit(1)
+
+
 @click.group()
 def cli():
     """Archivist - manage your research papers and documents."""
@@ -45,11 +65,16 @@ def paper_group():
 @click.argument("pdf", type=click.Path(exists=True, path_type=Path))
 @click.option("--title", "-t", help="Paper title (default: extracted from PDF)")
 @click.option("--tags", help="Comma-separated tags")
+@click.option("--allow-new-tag", multiple=True,
+              help="Whitelist override: accept this tag even if not in config.yaml. "
+                   "Repeatable. Use sparingly; prefer the proposed_tags pipeline.")
 @click.option("--category", "-c", default="other", help="Comma-separated categories: generative-rec / discriminative-rec / llm / other (可多选，如 generative-rec,discriminative-rec)")
-def paper_import(pdf: Path, title: str | None, tags: str | None, category: str):
+def paper_import(pdf: Path, title: str | None, tags: str | None, allow_new_tag: tuple[str, ...], category: str):
     """Import a PDF paper into the archive."""
     ensure_archive_dirs()
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+    if tag_list:
+        _check_tags_or_exit(tag_list, allow_new_tag)
     cat_list = [c.strip() for c in category.split(",") if c.strip()] or ["other"]
     meta = paper_store.import_paper(pdf, title=title, tags=tag_list, category=cat_list)
     click.echo(f"Imported: {meta.title}")
@@ -115,7 +140,12 @@ def paper_show(slug: str):
 
 @paper_group.command("edit")
 @click.argument("slug")
-@click.option("--tags", help="Set tags (comma-separated)")
+@click.option("--tags", help="Set tags (comma-separated). Validated against config.yaml whitelist.")
+@click.option("--proposed-tags", help="Set LLM-proposed tags awaiting whitelist review (comma-separated). "
+                                     "Bypasses whitelist validation by design.")
+@click.option("--allow-new-tag", multiple=True,
+              help="Accept this tag even if not in whitelist (repeatable). "
+                   "Prefer the proposed_tags pipeline + `archivist tag promote`.")
 @click.option("--status", help="Set read status: unread/reading/read")
 @click.option("--rating", type=int, help="Set rating (1-10)")
 @click.option("--rating-reason", help="Reason/note for the rating (used by /refine-rubric)")
@@ -127,7 +157,9 @@ def paper_show(slug: str):
 @click.option("--reading-score", type=float, help="Set reading score (1-10)")
 @click.option("--published-date", help="Set published date (YYYY-MM-DD)")
 @click.option("--url", help="Set ArXiv URL")
-def paper_edit(slug: str, tags: str | None, status: str | None, rating: int | None,
+def paper_edit(slug: str, tags: str | None, proposed_tags: str | None,
+               allow_new_tag: tuple[str, ...],
+               status: str | None, rating: int | None,
                rating_reason: str | None, feedback_consumed: bool | None,
                category: str | None, title: str | None, model_name: str | None,
                reading_score: float | None,
@@ -140,7 +172,12 @@ def paper_edit(slug: str, tags: str | None, status: str | None, rating: int | No
     """
     kwargs = {}
     if tags is not None:
-        kwargs["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+        if tag_list:
+            _check_tags_or_exit(tag_list, allow_new_tag)
+        kwargs["tags"] = tag_list
+    if proposed_tags is not None:
+        kwargs["proposed_tags"] = [t.strip() for t in proposed_tags.split(",") if t.strip()]
     if status is not None:
         kwargs["read_status"] = status
     if rating is not None:
@@ -372,6 +409,131 @@ def rubric_list_pending(fmt: str):
         if c.rating_reason:
             click.echo(f"    reason:    {c.rating_reason[:120]}")
         click.echo()
+
+
+# ── Tag whitelist governance ────────────────────────────────
+
+
+@cli.group("tag")
+def tag_group():
+    """Govern the tag whitelist (config.yaml).
+
+    LLM-proposed tags accumulate in each paper's `proposed_tags` field.
+    Use this group to triage them: promote good ones into the active
+    whitelist, alias synonyms onto existing tags, or reject noise.
+    """
+    pass
+
+
+@tag_group.command("list-pending")
+@click.option("--threshold", type=int, default=3,
+              help="Mark tags with ≥N papers as ready-to-promote (default 3)")
+@click.option("--format", "fmt", default="table",
+              type=click.Choice(["table", "json"]), help="Output format")
+def tag_list_pending(threshold: int, fmt: str):
+    """List LLM-proposed tags awaiting human review."""
+    from archivist.services.tag_pending import collect_pending
+
+    pending = collect_pending(threshold=threshold)
+    if fmt == "json":
+        click.echo(json.dumps([p.to_dict() for p in pending],
+                              ensure_ascii=False, indent=2))
+        return
+
+    if not pending:
+        click.echo("No pending proposed_tags.")
+        return
+
+    click.echo(f"Pending proposed tags ({len(pending)} unique):\n")
+    for p in pending:
+        marker = "  [ready to promote]" if p.ready_to_promote else ""
+        click.echo(f"  {p.tag}  ×{p.paper_count}{marker}")
+        for slug in p.slugs[:5]:
+            click.echo(f"      {slug}")
+        if len(p.slugs) > 5:
+            click.echo(f"      … and {len(p.slugs) - 5} more")
+
+
+def _append_tag_to_config(tag: str, gloss: str = "") -> None:
+    """Append a new entry to the `tags:` block in config.yaml, preserving comments."""
+    from archivist.config import PROJECT_ROOT
+    config_path = PROJECT_ROOT / "config.yaml"
+    text = config_path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+
+    # Locate the `tags:` block
+    start = None
+    for i, ln in enumerate(lines):
+        if ln.strip() == "tags:" or ln.startswith("tags:"):
+            start = i
+            break
+    if start is None:
+        raise click.ClickException("config.yaml has no top-level `tags:` block")
+
+    # Find last `  - <tag>` line in the block; the block ends when indent drops
+    last_item = start
+    for i in range(start + 1, len(lines)):
+        ln = lines[i]
+        stripped = ln.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if ln.startswith("  -"):
+            last_item = i
+        elif not ln.startswith("  "):
+            break  # exited the tags block
+
+    new_line = f"  - {tag}"
+    if gloss:
+        new_line = f"  - {tag:<22} # {gloss}"
+    lines.insert(last_item + 1, new_line)
+    config_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+@tag_group.command("promote")
+@click.argument("tag")
+@click.option("--gloss", default="", help="Optional one-line Chinese gloss for the tag")
+def tag_promote(tag: str, gloss: str):
+    """Add `tag` to config.yaml and migrate proposed_tags → tags everywhere."""
+    from archivist.services.tag_registry import load_whitelist, reload_whitelist
+    from archivist.services.tag_pending import promote_tag
+
+    if tag in load_whitelist():
+        click.echo(f"{tag!r} already in whitelist; skipping config edit.")
+    else:
+        _append_tag_to_config(tag, gloss=gloss)
+        reload_whitelist()
+        click.echo(f"Added {tag!r} to config.yaml whitelist.")
+
+    updated, _ = promote_tag(tag)
+    click.echo(f"Migrated {updated} paper(s): proposed_tags[{tag!r}] → tags[{tag!r}].")
+
+
+@tag_group.command("alias")
+@click.argument("old_tag")
+@click.argument("new_tag")
+def tag_alias(old_tag: str, new_tag: str):
+    """Rewrite proposed_tags[OLD_TAG] → tags[NEW_TAG] across all papers.
+
+    Use when a proposed tag turns out to be a synonym of an existing whitelist tag.
+    """
+    from archivist.services.tag_pending import alias_tag
+
+    try:
+        updated = alias_tag(old_tag, new_tag)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    click.echo(f"Rewrote {updated} paper(s): proposed_tags[{old_tag!r}] → tags[{new_tag!r}].")
+
+
+@tag_group.command("reject")
+@click.argument("tag")
+@click.confirmation_option(prompt="Drop this proposed tag from all papers?")
+def tag_reject(tag: str):
+    """Drop a proposed tag from every paper's proposed_tags list."""
+    from archivist.services.tag_pending import reject_tag
+
+    updated = reject_tag(tag)
+    click.echo(f"Removed {tag!r} from {updated} paper(s).")
 
 
 # ── Doc commands ────────────────────────────────────────────

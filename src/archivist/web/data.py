@@ -182,9 +182,9 @@ def prepare_graph_data(dataset: str | None = None) -> dict:
     categories = ["generative-rec", "discriminative-rec", "llm", "other"]
     companies = sorted({n.get("company", "") for n in graph_data["nodes"].values() if n.get("company")})
 
-    # Tag taxonomy from config (grouped) — same source as the reading list
-    from archivist.config import load_config as _load_cfg
-    tag_groups = (_load_cfg().get("tags", {}) or {})
+    # Flat tag whitelist from config — same source as the reading list
+    from archivist.services.tag_registry import load_whitelist
+    tag_list = sorted(load_whitelist())
 
     # Reverse index: paper_id → model name (used to display readable names
     # instead of arxiv ids in popups, edge details, etc.)
@@ -203,7 +203,7 @@ def prepare_graph_data(dataset: str | None = None) -> dict:
         "datasets": datasets,
         "categories": categories,
         "companies": companies,
-        "tag_groups": tag_groups,
+        "tag_list": tag_list,
         "pid_to_model": pid_to_model,
         "reading_urls": reading_urls,
         "last_updated": graph.last_updated[:10],
@@ -263,8 +263,8 @@ def prepare_benchmark_data(dataset: str | None = None) -> dict:
         })
 
     # Filter taxonomy — same lists as the graph/reading pages
-    from archivist.config import load_config as _load_cfg
-    tag_groups = (_load_cfg().get("tags", {}) or {})
+    from archivist.services.tag_registry import load_whitelist
+    tag_list = sorted(load_whitelist())
     companies = sorted({e["company"] for ds in result for e in ds["entries"] if e.get("company")})
     categories = ["generative-rec", "discriminative-rec", "llm", "other"]
 
@@ -386,7 +386,7 @@ def prepare_benchmark_data(dataset: str | None = None) -> dict:
         "reading_urls": reading_urls,
         "categories": categories,
         "companies": companies,
-        "tag_groups": tag_groups,
+        "tag_list": tag_list,
         "model_index": model_index,
         "pid_to_model": pid_to_model,
         "conflicts": conflicts_by_ds,

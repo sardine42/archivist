@@ -248,13 +248,8 @@ async function init() {
     }));
     buildMultiMenu('coMenu', 'coDd', DATA.companies.map(function(c) { return {value: c, label: c}; }));
 
-    // Tags: grouped multi-select (task / method / scene)
-    var tagItems = [];
-    var tg = DATA.tag_groups || {};
-    Object.keys(tg).forEach(function(group) {
-        tagItems.push({group: group});
-        (tg[group] || []).forEach(function(t) { tagItems.push({value: t, label: t}); });
-    });
+    // Tags: flat multi-select (whitelist from config.yaml)
+    var tagItems = (DATA.tag_list || []).map(function(t) { return {value: t, label: t}; });
     buildMultiMenu('tagMenu', 'tagDd', tagItems);
 
     // Populate the search datalist with all node names

@@ -115,8 +115,56 @@ def _escape_unescaped_controls_in_strings(text: str) -> str:
     return "".join(out)
 
 
+def _escape_unescaped_inner_quotes(text: str) -> str:
+    """Escape stray ``"`` characters that appear inside JSON string literals.
+
+    Heuristic: a ``"`` is treated as a string terminator iff the next
+    non-whitespace character is one of ``,:]}`` or end-of-text. Otherwise it's
+    assumed to be content the model forgot to escape (common when an LLM
+    writes Chinese text but quotes a term using ASCII ``"``).
+    """
+    out: list[str] = []
+    in_str = False
+    escape = False
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if in_str:
+            if escape:
+                out.append(ch)
+                escape = False
+                i += 1
+                continue
+            if ch == "\\":
+                out.append(ch)
+                escape = True
+                i += 1
+                continue
+            if ch == '"':
+                j = i + 1
+                while j < n and text[j] in " \t\n\r":
+                    j += 1
+                if j >= n or text[j] in ",:]}":
+                    out.append(ch)
+                    in_str = False
+                else:
+                    out.append("\\")
+                    out.append(ch)
+                i += 1
+                continue
+            out.append(ch)
+            i += 1
+        else:
+            out.append(ch)
+            if ch == '"':
+                in_str = True
+            i += 1
+    return "".join(out)
+
+
 def _try_parse_json(text: str) -> Any | None:
-    """Best-effort JSON parse with two salvage steps.
+    """Best-effort JSON parse with three salvage steps.
 
     Returns the parsed value, or ``None`` if every strategy fails.
     The caller is responsible for raising with diagnostic context.
@@ -138,6 +186,13 @@ def _try_parse_json(text: str) -> Any | None:
     if repaired != candidate:
         try:
             return json.loads(repaired)
+        except json.JSONDecodeError:
+            pass
+
+    quote_repaired = _escape_unescaped_inner_quotes(repaired)
+    if quote_repaired != repaired:
+        try:
+            return json.loads(quote_repaired)
         except json.JSONDecodeError:
             pass
 

@@ -36,3 +36,5 @@
    - 值得关注的论文（点名 model_name + 一句价值描述）
 
 5. **空周处理**：若 `daily_reports` 为空或所有日报都是空数据日，返回 `theme="本周无相关论文"`、`highlights=[]`、`summary="本周无相关 ArXiv 提交。"`、`theme_tags=[]`。
+
+6. **JSON 字符串安全**：`summary` / `theme` 等字段的中文文本里如果要引用术语，**必须用中文双引号 `""`**，不要用 ASCII `"`（否则会破坏 JSON）。若不得不用 ASCII 引号，请转义为 `\"`。

@@ -45,3 +45,4 @@
    - **scene**: industrial, academic
 5. `category` 必须为四选一：`generative-rec` / `discriminative-rec` / `llm` / `other`
 6. `model_name` 是论文提出的命名模型（如 SSR、TIGER、HSTU）；如果论文没有命名（综述、benchmark 介绍等），留空字符串
+7. **JSON 字符串安全**：`summary_zh` / `score_reason` 等中文字段里如果要引用术语，**必须用中文双引号 `""`**，不要用 ASCII `"`（否则会破坏 JSON）。若不得不用 ASCII 引号，请转义为 `\"`。

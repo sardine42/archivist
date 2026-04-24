@@ -37,3 +37,5 @@
    - **未来值得关注的趋势**：未必本月已成熟，但已有苗头的方向
 
 5. **空月处理**：若 `daily_reports` 和 `weekly_reports` 都为空，返回 `theme="本月无相关论文"`、`highlights=[]`、`summary="本月无相关 ArXiv 提交。"`、`theme_tags=[]`。
+
+6. **JSON 字符串安全**：`summary` / `theme` 等字段的中文文本里如果要引用术语，**必须用中文双引号 `""`**，不要用 ASCII `"`（否则会破坏 JSON）。若不得不用 ASCII 引号，请转义为 `\"`。

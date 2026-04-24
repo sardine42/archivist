@@ -18,7 +18,8 @@
     "one_line_summary_en": "One English sentence",
     "keywords": ["关键词1", "关键词2"],
     "tags": ["generative-retrieval", "semantic-id", "industrial"],
-    "url": "https://arxiv.org/abs/1234.56789"
+    "url": "https://arxiv.org/abs/1234.56789",
+    "generated_by": "claude-opus-4-7"
   },
   "benchmarks": [
     {
@@ -71,6 +72,7 @@
 - `reading_score`: **必填**，精读评分 (1-10)，参考 `archive/criteria/reading-criteria.md` 中的精读评分标准
 - `reading_score_reason`: **必填**，精读打分理由（1-2句话，说明为什么给这个分数，内部排查用）
 - `url`: ArXiv 链接
+- `generated_by`: **必填**，执行本次精读的 Claude 模型 ID（如 `"claude-opus-4-7"`、`"claude-sonnet-4-6"`）。从 system prompt 里读取自己的模型标识，不要手编。该字段用于详情页展示"由谁精读"。
 
 ### benchmarks
 - **指标值统一使用小数制**：如 Recall@10=0.0648 而非 6.48，NDCG@10=0.0384 而非 3.84。系统会自动将 >1 的值除以 100

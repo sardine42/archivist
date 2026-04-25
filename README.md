@@ -312,16 +312,20 @@ claude mcp add archivist /path/to/my_archive/.venv/bin/archivist-mcp \
   -e ARCHIVIST_ROOT=/path/to/my_archive --scope user
 ```
 
-之后在任意项目里以 `mcp__archivist__<tool>` 调用，10 个 tool：
+之后在任意项目里以 `mcp__archivist__<tool>` 调用。三层渐进披露设计：tier 1 批量加载 →
+tier 2 单篇精读 → tier 3 PDF 原文（rare），让 agent 按需控制 context 开销。
 
-| Tool | 用途 |
-|------|------|
-| `search_papers` | 按关键字 / tag / deeply_read 过滤论文 |
-| `get_paper` / `get_paper_reading` | 读单篇 meta / 精读 reading.md |
-| `search_docs` / `get_doc` | 内部文档检索与读取 |
-| `list_tags` | 标签白名单 |
-| `search_models` / `get_model` | DAG 节点与引用/比较边 |
-| `list_digests` / `get_digest` | 日/周/月报 |
+| Tool | 用途 | 渐进层级 |
+|------|------|---------|
+| `load_papers` | 按 tag/category/year 批量拉 meta + 双语一句话总结 | tier 1（批量） |
+| `search_papers` | 按关键字模糊搜索 | — |
+| `get_paper` | 单篇完整 meta（默认隐藏 score_reason 等内部字段） | — |
+| `get_paper_reading` | 单篇精读 reading.md（5–15k 字符） | tier 2（按需） |
+| `get_paper_pdf` | 返回 PDF 路径 + 页数；agent 用 Read tool 读指定页 | tier 3（罕见） |
+| `search_docs` / `get_doc` | 内部文档检索与读取 | — |
+| `list_tags` | 标签白名单 | — |
+| `search_models` / `get_model` | DAG 节点与引用/比较边 | — |
+| `list_digests` / `get_digest` | 日/周/月报 | — |
 
 实现见 `src/archivist/mcp_server.py`，所有 tool 都直接复用 `services/` 里的纯读函数。
 

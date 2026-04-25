@@ -52,6 +52,28 @@ def _paper_summary(paper: PaperMeta) -> dict[str, Any]:
     }
 
 
+def _paper_loaded(paper: PaperMeta, has_reading_report: bool) -> dict[str, Any]:
+    """Richer summary for `load_papers` — bilingual summaries + tier-2 availability hint."""
+    return {
+        "slug": paper.slug,
+        "title": paper.title,
+        "authors": paper.authors,
+        "year": paper.year,
+        "published_date": paper.published_date,
+        "tags": paper.tags,
+        "category": paper.category,
+        "model_name": paper.model_name,
+        "arxiv_id": paper.arxiv_id,
+        "url": paper.url,
+        "one_line_summary": paper.one_line_summary,
+        "one_line_summary_en": paper.one_line_summary_en,
+        "score": paper.score,
+        "reading_score": paper.reading_score,
+        "deeply_read": paper.deeply_read,
+        "has_reading_report": has_reading_report,
+    }
+
+
 def _score_paper(query: str, paper: PaperMeta) -> int:
     """Substring-match score across paper fields. 0 = no match."""
     if not query:
@@ -324,6 +346,121 @@ def get_digest(period: str, digest_id: str) -> dict[str, Any] | None:
     if meta is None:
         return None
     return {"meta": meta.to_dict(), "markdown": body}
+
+
+_VALID_SORTS = ("reading_score", "date_added", "score")
+
+
+@mcp.tool()
+def load_papers(
+    tags: list[str] | None = None,
+    category: str | None = None,
+    year: int | None = None,
+    deeply_read_only: bool = False,
+    sort: str = "reading_score",
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Tier-1 batch loader: pull a topical slice of papers into context.
+
+    Use this when you want to survey what the archive has on a topic before
+    deciding which paper(s) to deepen on. Returns richer summaries than
+    search_papers (bilingual one-liners + has_reading_report flag for tier-2
+    triage). For keyword search use search_papers instead.
+
+    Progressive disclosure: this is tier 1 (cheap, batch). Tier 2 = call
+    get_paper_reading(slug) for the deep-read report. Tier 3 = call
+    get_paper_pdf(slug) only if the reading report doesn't answer your question.
+
+    Args:
+        tags: Filter to papers carrying ALL of these tags (intersection).
+            Use list_tags to see the whitelist.
+        category: One of "discriminative-rec", "generative-rec", "llm", "other".
+        year: e.g. 2026.
+        deeply_read_only: If True, exclude shallow/brief papers (no reading report).
+        sort: "reading_score" (default, agent-judged depth) | "date_added" (newest first)
+            | "score" (LLM triage score from digest pipeline). All descending.
+        limit: Max results (default 20).
+
+    Returns: list of paper dicts with bilingual summaries, scores, and
+        has_reading_report flag indicating whether tier-2 is available.
+    """
+    if sort not in _VALID_SORTS:
+        sort = "reading_score"
+
+    base_tag = tags[0] if tags else None
+    papers = paper_store.list_papers(tag=base_tag, year=year, category=category)
+
+    if tags and len(tags) > 1:
+        rest = set(tags[1:])
+        papers = [p for p in papers if rest.issubset(set(p.tags))]
+    if deeply_read_only:
+        papers = [p for p in papers if p.deeply_read]
+
+    if sort == "reading_score":
+        papers.sort(key=lambda p: (p.reading_score, p.date_added), reverse=True)
+    elif sort == "score":
+        papers.sort(key=lambda p: (p.score, p.date_added), reverse=True)
+    # date_added: list_papers already returns newest first
+
+    out = []
+    for p in papers[:limit]:
+        paper_dir = paper_store.get_paper_dir(p.slug)
+        has_report = bool(paper_dir and (paper_dir / "reading.md").exists())
+        out.append(_paper_loaded(p, has_report))
+    return out
+
+
+@mcp.tool()
+def get_paper_pdf(slug: str) -> dict[str, Any] | None:
+    """Tier-3 escape hatch: resolve a paper's PDF path so you can read it directly.
+
+    USAGE: this tool returns the PDF's filesystem path. To read its contents
+    you MUST use Claude Code's built-in Read tool with the `pages` argument
+    (e.g. Read(file_path=pdf_path, pages="5-8")). Do NOT extract text via
+    pymupdf, pdfplumber, or any other library — Read handles PDFs natively
+    and is the only sanctioned path here.
+
+    Reach for this only when get_paper_reading didn't answer your question
+    (e.g. you need a specific algorithm, table, or figure caption verbatim).
+    Brief papers have no archived PDF and return pdf_path=None.
+
+    Args:
+        slug: The paper slug (from search_papers / load_papers).
+
+    Returns: {slug, title, pdf_path, page_count, size_bytes, read_hint} on
+        success; {slug, pdf_path: None, reason} for brief / missing papers;
+        None if the slug is not in the archive at all.
+    """
+    paper = paper_store.get_paper(slug)
+    if paper is None:
+        return None
+    paper_dir = paper_store.get_paper_dir(slug)
+    if paper_dir is None:
+        return None
+    pdf_path = paper_dir / "document.pdf"
+    if not pdf_path.exists():
+        return {
+            "slug": slug,
+            "title": paper.title,
+            "pdf_path": None,
+            "reason": "brief paper, no PDF archived",
+        }
+
+    import pymupdf
+
+    with pymupdf.open(pdf_path) as doc:
+        page_count = len(doc)
+
+    return {
+        "slug": slug,
+        "title": paper.title,
+        "pdf_path": str(pdf_path),
+        "page_count": page_count,
+        "size_bytes": pdf_path.stat().st_size,
+        "read_hint": "Use Claude Code's Read tool with this path and a `pages` arg "
+                     "(e.g. pages='5-8') to extract specific pages. Do not use any "
+                     "other PDF parsing library.",
+    }
 
 
 def main() -> None:

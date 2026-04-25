@@ -219,7 +219,6 @@ def archive_scored_paper(
         "category": _coerce_category(score_result.get("category", ["other"])),
         "one_line_summary": score_result.get("summary_zh", ""),
         "one_line_summary_en": score_result.get("summary_en", ""),
-        "keywords": list(score_result.get("keywords") or []),
         "score": int(score),
         "score_reason": score_result.get("score_reason", ""),
         "deeply_read": False,

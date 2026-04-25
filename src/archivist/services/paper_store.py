@@ -58,11 +58,6 @@ def import_paper(
     if pdf_meta["author"]:
         authors = [a.strip() for a in pdf_meta["author"].split(",") if a.strip()]
 
-    # Parse keywords from PDF metadata
-    keywords = []
-    if pdf_meta["keywords"]:
-        keywords = [k.strip() for k in pdf_meta["keywords"].split(",") if k.strip()]
-
     if category is None:
         cat_list = ["other"]
     elif isinstance(category, str):
@@ -79,7 +74,6 @@ def import_paper(
         source_filename=pdf_path.name,
         tags=tags or [],
         category=cat_list,
-        keywords=keywords,
     )
     write_json(paper_dir / "meta.json", meta.to_dict())
     return meta

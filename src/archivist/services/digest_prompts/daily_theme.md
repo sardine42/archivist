@@ -13,7 +13,7 @@
 ```json
 {{
   "theme": "本日核心主题（10-30 字）",
-  "theme_tags": ["semantic-id", "scaling", "industrial"],
+  "theme_tags": ["semantic-id", "parameter-scaling", "industrial"],
   "highlights": ["1234.56789", "1234.56790"],
   "summary": "200-300 字中文综述..."
 }}
@@ -26,15 +26,12 @@
    - 若 `reading_score >= 8` 不足，按 `score` 降序补到 3-5 篇
    - 列出 arxiv_id（去掉版本号 v1 后缀）
 
-2. **theme**（10-30 字中文）：识别当日论文的共同方向。检查 tags / keywords / category 的共性。例如：
+2. **theme**（10-30 字中文）：识别当日论文的共同方向。检查 tags / category 的共性。例如：
    - "工业级生成式与判别式推荐双线突破"
    - "Semantic ID 与 RQ-VAE 的可扩展性优化"
    - "LLM 推荐系统：从 finetune 到强化推理"
 
-3. **theme_tags**：从下列标签库选 2-5 个最贴合的：
-   - task: sequential-rec, generative-retrieval, ctr-prediction, conversational-rec, cold-start, search-ranking, explainable-rec, ad-rec, multi-business
-   - method: transformer, moe, rl, contrastive-learning, knowledge-distillation, quantization, semantic-id, llm-based, scaling, diffusion, attention-mechanism, feature-interaction
-   - scene: industrial, academic
+3. **theme_tags**：从扁平 tag 白名单选 2-5 个最贴合的（白名单见 `config.yaml` 的 `tags:` 字段，与 score_papers 一致）：transformer, moe, diffusion, pretrained-lm, rl, contrastive-ssl, knowledge-distillation, process-supervision, parameter-scaling, recursive-depth, sparse-attention, test-time-training, semantic-id, feature-interaction, quantization, cold-start, search-ranking, ad-rec, industrial, academic
 
 4. **summary**（200-300 字中文）：三段式
    - 第一句：当日论文总览（数量 / 类别分布 / 工业-学术分布）

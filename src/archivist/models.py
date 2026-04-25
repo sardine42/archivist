@@ -27,7 +27,6 @@ class PaperMeta:
     # 通用架构（如 HSTU）同时适用生成式与判别式时写 ["generative-rec", "discriminative-rec"]。
     one_line_summary: str = ""           # 中文总结（含核心假设、方案、实验结果）
     one_line_summary_en: str = ""        # English summary (hypothesis, method, results)
-    keywords: list[str] = field(default_factory=list)
     is_generative_rec: bool = False
     score: float = 0.0
     score_reason: str = ""               # 内部排查用，不展示

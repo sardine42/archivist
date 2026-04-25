@@ -18,7 +18,7 @@ _META_FIELDS = [
     "authors", "affiliations", "category",
     "score", "score_reason",
     "one_line_summary", "one_line_summary_en",
-    "keywords", "tags", "proposed_tags", "model_name",
+    "tags", "proposed_tags", "model_name",
     "reading_score", "reading_score_reason",
     "published_date", "generated_by",
 ]

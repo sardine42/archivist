@@ -1012,7 +1012,6 @@ def search(query: str, doc_type: str, tag: str | None):
                 data.get("abstract", ""),
                 " ".join(data.get("authors", [])),
                 " ".join(data.get("tags", [])),
-                " ".join(data.get("keywords", [])),
                 data.get("one_line_summary", ""),
                 data.get("notes", ""),
             ]).lower()

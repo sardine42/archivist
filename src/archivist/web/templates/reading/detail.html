@@ -87,14 +87,6 @@
         </div>
         {% endif %}
 
-        {% if paper.keywords %}
-        <div class="meta-keywords">
-            {% for kw in paper.keywords %}
-            <span class="keyword-pill">{{ kw }}</span>
-            {% endfor %}
-        </div>
-        {% endif %}
-
         <div class="meta-links">
             {% if paper.url %}
             <a href="{{ paper.url }}" target="_blank" class="meta-link">ArXiv</a>

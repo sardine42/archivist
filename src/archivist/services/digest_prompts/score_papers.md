@@ -29,7 +29,6 @@
   "summary_en": "English 1-2 sentence summary",
   "tags": ["transformer", "moe", "industrial"],
   "proposed_tags": [],
-  "keywords": ["kw1", "kw2", "kw3"],
   "is_proposed_named_model": true,
   "skip_reason": ""
 }}
@@ -38,7 +37,7 @@
 # 重要规则
 
 1. **必须返回所有 {n_candidates} 篇论文**，不要漏，也不要丢掉低分论文
-2. score < 4 的论文：仍然返回完整对象，但 `summary_zh / summary_en / tags / keywords` 可为空字符串/空数组，并在 `skip_reason` 写明原因（"非推荐系统主线" / "无实质方法" 等）
+2. score < 4 的论文：仍然返回完整对象，但 `summary_zh / summary_en / tags` 可为空字符串/空数组，并在 `skip_reason` 写明原因（"非推荐系统主线" / "无实质方法" 等）
 3. 若候选 JSON 中标记 `is_existing: true`，可以**直接复用** `existing_meta` 里已有的 score/category/model_name/summary——你只需在输出里照抄即可，不需要重新评分
 4. `tags` **必须** 从下面扁平白名单中选；每篇 4–6 个，不确定时**少打不要凑数**：
 
@@ -67,7 +66,7 @@
 
    **废弃 tag**（不要再用）：`ctr-prediction` / `sequential-rec` / `generative-retrieval` 已由 `category` 字段承载；`attention-mechanism` 与 `transformer` 重复；`scaling` 改名为 `parameter-scaling`；`llm-based` 改名为 `pretrained-lm`；`contrastive-learning` 改名为 `contrastive-ssl`。
 
-5. `proposed_tags` (0–2 个)：若论文确有一个**通用、能聚多篇论文**的新主题不在白名单中，可在此提案。要求是**类别词**（≤3 个英文单词，连字符连接，如 `mixture-of-depths`），**不是论文专属创新点**（后者继续放 `keywords`）。绝大多数情况留空 `[]`。
+5. `proposed_tags` (0–2 个)：若论文确有一个**通用、能聚多篇论文**的新主题不在白名单中，可在此提案。要求是**类别词**（≤3 个英文单词，连字符连接，如 `mixture-of-depths`），**不是论文专属创新点**（专属创新点不需要单独字段，体现在 summary 即可）。绝大多数情况留空 `[]`。
 6. `category` 为数组，元素从 `generative-rec` / `discriminative-rec` / `llm` / `other` 中选，至少一项。通用序列建模架构（如 HSTU）既能跑生成式又能跑判别式场景时可双选：`["generative-rec", "discriminative-rec"]`
 7. `model_name` 是论文提出的命名模型（如 SSR、TIGER、HSTU）；如果论文没有命名（综述、benchmark 介绍等），留空字符串
 8. **JSON 字符串安全**：`summary_zh` / `score_reason` 等中文字段里如果要引用术语，**必须用中文双引号 `""`**，不要用 ASCII `"`（否则会破坏 JSON）。若不得不用 ASCII 引号，请转义为 `\"`。

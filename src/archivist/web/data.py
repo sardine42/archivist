@@ -134,7 +134,6 @@ def prepare_graph_data(dataset: str | None = None) -> dict:
             node["summary_en"] = meta.get("one_line_summary_en", "")
             node["score"] = meta.get("score", "")
             node["reading_score"] = meta.get("reading_score", "")
-            node["keywords"] = meta.get("keywords", [])
             node["tags"] = meta.get("tags", []) or []
             node["category"] = _normalize_cat(meta.get("category"))
             node["arxiv_url"] = f"https://arxiv.org/abs/{pid}" if pid else ""

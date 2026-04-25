@@ -212,9 +212,9 @@
             <div class="card-summary">{{ p.one_line_summary }}</div>
             {% endif %}
             <div class="card-bottom">
-                <div class="card-keywords">
+                <div class="card-tag-pills">
                     {% for tag in p.tags[:5] %}
-                    <span class="keyword-pill">{{ tag }}</span>
+                    <span class="tag-pill">{{ tag }}</span>
                     {% endfor %}
                 </div>
                 {% if p.published_date %}

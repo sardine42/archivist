@@ -133,7 +133,6 @@ def prepare_daily(date: str) -> dict:
                 "reading_score": m.get("reading_score", 0),
                 "one_line_summary": m.get("one_line_summary", ""),
                 "one_line_summary_en": m.get("one_line_summary_en", ""),
-                "keywords": m.get("keywords", []),
                 "deeply_read": has_reading,
                 "skip_reason": m.get("skip_reason", ""),
                 "slug": m.get("slug", ""),

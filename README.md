@@ -300,6 +300,31 @@ CRON_TZ=Asia/Shanghai
 PDF 阅读、公式抽取、表格还原、figure 插入位置、语义孪生检索、benchmark 冲突解析、DAG 边推断都需要 agent 智能）。
 Step 2.5 的"横向语义孪生检索"会在已归档论文中挖掘问题 + 解法双同构的独立并发工作，把对比写进 `reading.md`。
 
+### 跨项目访问（MCP server）
+
+`archivist-mcp` 是只读 stdio MCP server，让其它 Claude Code 项目里的 agent 也能查这个文档库
+（搜论文、读精读报告、查 DAG / digest / 标签等）。写路径仍然只在本项目里走。
+
+注册（用户级，所有项目共享）：
+
+```bash
+claude mcp add archivist /path/to/my_archive/.venv/bin/archivist-mcp \
+  -e ARCHIVIST_ROOT=/path/to/my_archive --scope user
+```
+
+之后在任意项目里以 `mcp__archivist__<tool>` 调用，10 个 tool：
+
+| Tool | 用途 |
+|------|------|
+| `search_papers` | 按关键字 / tag / deeply_read 过滤论文 |
+| `get_paper` / `get_paper_reading` | 读单篇 meta / 精读 reading.md |
+| `search_docs` / `get_doc` | 内部文档检索与读取 |
+| `list_tags` | 标签白名单 |
+| `search_models` / `get_model` | DAG 节点与引用/比较边 |
+| `list_digests` / `get_digest` | 日/周/月报 |
+
+实现见 `src/archivist/mcp_server.py`，所有 tool 都直接复用 `services/` 里的纯读函数。
+
 ### 评分反馈闭环
 
 两份评分标准都在 `archive/criteria/`（gitignored，属随用户使用持续演化的个人数据）：

@@ -348,44 +348,55 @@ def get_digest(period: str, digest_id: str) -> dict[str, Any] | None:
     return {"meta": meta.to_dict(), "markdown": body}
 
 
-_VALID_SORTS = ("reading_score", "date_added", "score")
+_VALID_SORTS = ("published_date", "reading_score", "date_added", "score")
 
 
-@mcp.tool()
+def _load_papers_description() -> str:
+    """Build load_papers' tool description at import time, embedding the live tag whitelist
+    so external agents see all valid tags + categories without an extra list_tags round trip."""
+    tag_list = ", ".join(sorted(tag_registry.load_whitelist()))
+    return f"""Tier-1 batch loader: pull a topical slice of papers into context by filtering on tags + category + year. Returns bilingual one-line summaries.
+
+Use this when surveying what the archive has on a topic before deciding which papers to deepen on. For keyword search use search_papers instead. Tier 2 = get_paper_reading(slug). Tier 3 = get_paper_pdf(slug).
+
+Args:
+    tags: List of tags; AND-intersection (a paper must carry ALL of them). Whitelist:
+        {tag_list}.
+        Map user intent directly onto tag names — e.g. "scaling" → parameter-scaling,
+        "MoE" → moe, "强化学习" → rl, "工业部署" → industrial, "长序列" → sparse-attention.
+    category: Independent dimension from tags. One of:
+        - "discriminative-rec": 判别式推荐 / 精排 / CTR 预估 / DLRM 谱系
+        - "generative-rec":    生成式推荐 / GRM
+        - "llm":               LLM-based / pretrained-LM 应用
+        - "other"
+        Map user intent: "精排/CTR/排序" → discriminative-rec; "生成式" → generative-rec.
+        A paper can belong to multiple categories (e.g. HSTU is both); filter is "contains".
+    year: e.g. 2026.
+    deeply_read_only: True excludes shallow / brief papers (no reading.md).
+    sort: "published_date" (default; paper publish date desc, undated last) |
+        "reading_score" (agent-judged depth) | "date_added" (when imported) |
+        "score" (LLM triage score). All descending.
+    limit: Max results (default 20).
+
+Combine tags + category for precise queries. Example: a user asking "推荐系统精排模型 scaling" maps to
+tags=["parameter-scaling"], category="discriminative-rec".
+
+Returns: list of paper dicts with bilingual summaries, scores, and has_reading_report flag
+    indicating whether tier-2 (get_paper_reading) is available."""
+
+
+@mcp.tool(description=_load_papers_description())
 def load_papers(
     tags: list[str] | None = None,
     category: str | None = None,
     year: int | None = None,
     deeply_read_only: bool = False,
-    sort: str = "reading_score",
+    sort: str = "published_date",
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    """Tier-1 batch loader: pull a topical slice of papers into context.
-
-    Use this when you want to survey what the archive has on a topic before
-    deciding which paper(s) to deepen on. Returns richer summaries than
-    search_papers (bilingual one-liners + has_reading_report flag for tier-2
-    triage). For keyword search use search_papers instead.
-
-    Progressive disclosure: this is tier 1 (cheap, batch). Tier 2 = call
-    get_paper_reading(slug) for the deep-read report. Tier 3 = call
-    get_paper_pdf(slug) only if the reading report doesn't answer your question.
-
-    Args:
-        tags: Filter to papers carrying ALL of these tags (intersection).
-            Use list_tags to see the whitelist.
-        category: One of "discriminative-rec", "generative-rec", "llm", "other".
-        year: e.g. 2026.
-        deeply_read_only: If True, exclude shallow/brief papers (no reading report).
-        sort: "reading_score" (default, agent-judged depth) | "date_added" (newest first)
-            | "score" (LLM triage score from digest pipeline). All descending.
-        limit: Max results (default 20).
-
-    Returns: list of paper dicts with bilingual summaries, scores, and
-        has_reading_report flag indicating whether tier-2 is available.
-    """
+    """See dynamic description registered above."""
     if sort not in _VALID_SORTS:
-        sort = "reading_score"
+        sort = "published_date"
 
     base_tag = tags[0] if tags else None
     papers = paper_store.list_papers(tag=base_tag, year=year, category=category)
@@ -396,7 +407,10 @@ def load_papers(
     if deeply_read_only:
         papers = [p for p in papers if p.deeply_read]
 
-    if sort == "reading_score":
+    if sort == "published_date":
+        # empty published_date sorts last (empty string < any "YYYY-MM-DD" in reverse)
+        papers.sort(key=lambda p: (p.published_date, p.date_added), reverse=True)
+    elif sort == "reading_score":
         papers.sort(key=lambda p: (p.reading_score, p.date_added), reverse=True)
     elif sort == "score":
         papers.sort(key=lambda p: (p.score, p.date_added), reverse=True)

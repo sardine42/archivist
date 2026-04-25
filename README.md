@@ -317,7 +317,7 @@ tier 2 单篇精读 → tier 3 PDF 原文（rare），让 agent 按需控制 con
 
 | Tool | 用途 | 渐进层级 |
 |------|------|---------|
-| `load_papers` | 按 tag/category/year 批量拉 meta + 双语一句话总结 | tier 1（批量） |
+| `load_papers` | 按 tag/category/year 批量拉 meta + 双语一句话总结，默认按 `published_date` 倒序 | tier 1（批量） |
 | `search_papers` | 按关键字模糊搜索 | — |
 | `get_paper` | 单篇完整 meta（默认隐藏 score_reason 等内部字段） | — |
 | `get_paper_reading` | 单篇精读 reading.md（5–15k 字符） | tier 2（按需） |
@@ -328,6 +328,8 @@ tier 2 单篇精读 → tier 3 PDF 原文（rare），让 agent 按需控制 con
 | `list_digests` / `get_digest` | 日/周/月报 | — |
 
 实现见 `src/archivist/mcp_server.py`，所有 tool 都直接复用 `services/` 里的纯读函数。
+`load_papers` 的 description 在 server 启动时把当前 tag 白名单 + 4 个 category 烤进去，
+agent 不需要先调 `list_tags` 就能直接选——加 tag 后重启 MCP server 自动反映。
 
 ### 评分反馈闭环
 

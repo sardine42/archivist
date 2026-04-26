@@ -39,19 +39,24 @@ def _normalize_company(affiliations: list[str]) -> str:
 def _coverage_range(date: str) -> tuple[str, str]:
     """Compute (start, end) inclusive date range covered by a daily digest.
 
-    Aligned with ArXiv publish cycle: ArXiv publishes at ET 20:00 (= Beijing
-    08:00 next day). The digest runs Tue-Sat at 09:00 Beijing time, catching
-    the previous night's batch.
+    Aligned with ArXiv announcement cycle (ET 20:00, Sun-Thu only — no Fri/Sat
+    announcements per https://info.arxiv.org/help/availability.html).
+    The digest runs Mon-Fri at 09:00 Beijing time (= prev day 21:00 ET), one
+    hour after each ArXiv announcement window.
 
     Rule: a digest generated on date D covers ArXiv submissions from:
-    - Tue → Fri + Sat + Sun + Mon (4 days, ArXiv's Monday batch includes weekend)
-    - Wed/Thu/Fri/Sat → previous calendar day only
-    - Mon/Sun → not scheduled, but if requested, covers previous day
+    - Mon → Friday only (catches the Sun ET 20:00 announcement of Thu-Fri batch)
+    - Tue → Sat + Sun + Mon (catches the Mon ET 20:00 announcement of weekend batch)
+    - Wed/Thu/Fri → previous calendar day only
+    - Sat/Sun → not scheduled (no ArXiv announcement); if requested, covers previous day
     """
     d = date_type.fromisoformat(date)
     weekday = d.weekday()  # Mon=0, Sun=6
-    if weekday == 1:  # Tuesday — covers weekend + Monday
-        start = d - timedelta(days=4)  # Friday
+    if weekday == 0:  # Monday — covers Friday's submissions only
+        start = d - timedelta(days=3)  # Friday
+        end = start
+    elif weekday == 1:  # Tuesday — covers Sat/Sun/Mon (Friday already covered by Mon cron)
+        start = d - timedelta(days=3)  # Saturday
         end = d - timedelta(days=1)    # Monday
     else:
         start = d - timedelta(days=1)
@@ -63,8 +68,9 @@ def prepare_daily(date: str) -> dict:
     """Scan archive/papers/ for papers published in the digest's coverage range.
 
     A digest generated on date D covers prior days' ArXiv submissions:
-    - Tue: covers Fri+Sat+Sun+Mon (ArXiv weekend batch)
-    - Wed-Sat: covers previous day
+    - Mon: covers Fri (Sun ET 20:00 announcement of Thu-Fri batch)
+    - Tue: covers Sat+Sun+Mon (Mon ET 20:00 announcement of weekend batch)
+    - Wed-Fri: covers previous day
 
     Filter by published_date in the coverage range.
     Cross-day deduplication: if the paper appeared in any earlier daily digest,

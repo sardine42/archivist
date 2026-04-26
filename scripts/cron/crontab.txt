@@ -17,11 +17,12 @@
 
 CRON_TZ=Asia/Shanghai
 
-# Daily digest — Tue-Sat at 09:00, aligned with ArXiv publish cycle.
-# ArXiv publishes at ET 20:00 (= Beijing 08:00 next day), so Tue 09:00
-# catches Monday night's batch (which includes weekend submissions).
-# Tuesday's digest covers Fri+Sat+Sun+Mon via _coverage_range().
-0 9 * * 2-6  /path/to/archivist/scripts/cron/daily-digest.sh
+# Daily digest — Mon-Fri at 09:00, aligned with ArXiv announcement cycle.
+# ArXiv announces Sun-Thu at ET 20:00 (= Beijing 09:00 next day), no Fri/Sat
+# announcements per https://info.arxiv.org/help/availability.html.
+# Coverage (see _coverage_range): Mon→Fri only, Tue→Sat-Mon (weekend batch),
+# Wed/Thu/Fri→previous day.
+0 9 * * 1-5  /path/to/archivist/scripts/cron/daily-digest.sh
 
 # Weekly digest — every Tuesday at 09:30 (covers the previous ISO week,
 # runs after daily digest to include all 5 daily reports)

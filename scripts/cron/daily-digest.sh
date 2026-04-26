@@ -24,9 +24,15 @@ export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
 
 START=$(date +%s)
 
+# Capture this run's output separately so we can detect the empty-day marker
+# without picking up prior runs that share the same daily log file.
+RUN_LOG="$(mktemp)"
+trap 'rm -f "$RUN_LOG"' EXIT
+
 flock -n -E 75 "$LOCK_FILE" \
-    "$ARCHIVIST" digest run >> "$LOG_FILE" 2>&1
+    "$ARCHIVIST" digest run > "$RUN_LOG" 2>&1
 EXIT=$?
+cat "$RUN_LOG" >> "$LOG_FILE"
 
 ELAPSED=$(($(date +%s) - START))
 
@@ -35,7 +41,11 @@ ELAPSED=$(($(date +%s) - START))
 } >> "$LOG_FILE"
 
 case $EXIT in
-    0)  NOTE="✅ daily-digest 完成 (${ELAPSED}s)" ;;
+    0)  if grep -q "daily digest skipped (empty)" "$RUN_LOG"; then
+            NOTE="📭 daily-digest 空日 — 0 候选 (${ELAPSED}s)"
+        else
+            NOTE="✅ daily-digest 完成 (${ELAPSED}s)"
+        fi ;;
     75) NOTE="⚠️ daily-digest 跳过：另一 digest 实例正在运行" ;;
     *)  NOTE="❌ daily-digest 失败 exit=${EXIT} (${ELAPSED}s)
 日志：${LOG_FILE}" ;;

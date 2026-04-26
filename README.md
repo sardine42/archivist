@@ -150,7 +150,7 @@ crontab -l     # 验证
 三个任务（Asia/Shanghai）：
 
 ```cron
-0 9  * * 2-6  .../scripts/cron/daily-digest.sh     # 周二~六 09:00
+0 9  * * 1-5  .../scripts/cron/daily-digest.sh     # 周一~五 09:00
 30 9 * * 2    .../scripts/cron/weekly-digest.sh    # 周二 09:30（上周周报）
 0 10 1 * *    .../scripts/cron/monthly-digest.sh   # 每月 1 号 10:00
 ```
@@ -273,7 +273,7 @@ cron + flock 串行调度，所有触发都通过 `~/.claude/settings.json` 的 
 # Asia/Shanghai
 CRON_TZ=Asia/Shanghai
 
-0 9 * * 2-6  /path/to/archivist/scripts/cron/daily-digest.sh    # 周二~周六 09:00（对齐 ArXiv 发布节奏，周二覆盖 Fri~Mon）
+0 9 * * 1-5  /path/to/archivist/scripts/cron/daily-digest.sh    # 周一~周五 09:00（对齐 ArXiv announcement，周一覆盖 Fri，周二覆盖 Sat~Mon）
 30 9 * * 2   /path/to/archivist/scripts/cron/weekly-digest.sh   # 周二 09:30（覆盖上一个 ISO 周，跟在日报后跑全 5 天）
 0 10 1 * *   /path/to/archivist/scripts/cron/monthly-digest.sh  # 1 号 10:00（覆盖上月）
 ```

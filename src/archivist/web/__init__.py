@@ -30,6 +30,8 @@ def create_app(mode: str = "dev") -> Flask:
     # Register blueprints
     from archivist.web.routes.reading import reading_bp
     app.register_blueprint(reading_bp)
+    from archivist.web.routes.site import site_bp
+    app.register_blueprint(site_bp)
 
     # Root redirect
     @app.route("/")

@@ -7,10 +7,9 @@ from pathlib import Path
 import markdown
 from jinja2 import Environment, FileSystemLoader
 
-import yaml
-
 from archivist.config import PAPERS_DIR, DOCS_DIR
 from archivist.services.paper_store import list_papers, get_paper_dir
+from archivist.web.data import load_docs
 from archivist.web.routes.reading import _normalize_company, _render_markdown, _resolve_wiki_links
 
 import click
@@ -18,50 +17,6 @@ import click
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
-
-
-def _load_docs(docs_dir: Path) -> list[dict]:
-    """Load markdown docs with YAML frontmatter from archive/docs/.
-
-    Supports two layouts:
-    - Subdirectory: archive/docs/<slug>/reading.md (with optional figures/)
-    - Flat file:    archive/docs/<slug>.md (legacy)
-    """
-    docs = []
-    if not docs_dir.exists():
-        return docs
-    # Subdirectory layout: <slug>/reading.md
-    for md_file in sorted(docs_dir.glob("*/reading.md")):
-        raw = md_file.read_text(encoding="utf-8")
-        if raw.startswith("---"):
-            _, fm, body = raw.split("---", 2)
-            meta = yaml.safe_load(fm) or {}
-        else:
-            meta, body = {}, raw
-        meta["slug"] = md_file.parent.name
-        meta["body"] = body.strip()
-        meta["has_figures"] = (md_file.parent / "figures").is_dir()
-        meta.setdefault("title", md_file.parent.name)
-        meta.setdefault("date", "")
-        meta.setdefault("summary", "")
-        docs.append(meta)
-    # Legacy flat file layout: <slug>.md
-    for md_file in sorted(docs_dir.glob("*.md")):
-        raw = md_file.read_text(encoding="utf-8")
-        if raw.startswith("---"):
-            _, fm, body = raw.split("---", 2)
-            meta = yaml.safe_load(fm) or {}
-        else:
-            meta, body = {}, raw
-        meta["slug"] = md_file.stem
-        meta["body"] = body.strip()
-        meta["has_figures"] = False
-        meta.setdefault("title", md_file.stem)
-        meta.setdefault("date", "")
-        meta.setdefault("summary", "")
-        docs.append(meta)
-    docs.sort(key=lambda d: d.get("date", ""), reverse=True)
-    return docs
 
 
 def build_site(output_dir: Path) -> None:
@@ -118,7 +73,7 @@ def build_site(output_dir: Path) -> None:
     from archivist.web.data import prepare_digests_data, build_paper_to_digests_index, render_digest_html
     digests = prepare_digests_data()
     digest_count = len(digests["daily"]) + len(digests["weekly"]) + len(digests["monthly"])
-    doc_count = len(_load_docs(DOCS_DIR))
+    doc_count = len(load_docs(DOCS_DIR))
     paper_to_digests = build_paper_to_digests_index()
 
     # Model search index shared across Reading / Graph / Benchmark tabs
@@ -272,7 +227,7 @@ def build_site(output_dir: Path) -> None:
     # ── Docs section ──
     env.globals["request"].path = "/docs/"
     click.echo("Rendering docs pages...")
-    all_docs = _load_docs(DOCS_DIR)
+    all_docs = load_docs(DOCS_DIR)
     docs_out = output_dir / "docs"
     docs_out.mkdir(parents=True, exist_ok=True)
 

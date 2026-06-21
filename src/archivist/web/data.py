@@ -4,7 +4,9 @@ import json
 import re
 from pathlib import Path
 
-from archivist.config import PAPERS_DIR, BENCHMARKS_DIR
+import yaml
+
+from archivist.config import PAPERS_DIR, BENCHMARKS_DIR, DOCS_DIR
 from archivist.services.dag import load_graph, get_datasets
 from archivist.services.benchmark import list_datasets, get_leaderboard, is_standard_metric
 from archivist.services.digest import load_digests, load_digest
@@ -633,3 +635,49 @@ def render_digest_html(period_type: str, digest_id: str) -> tuple[dict | None, s
         extensions=["fenced_code", "tables", "toc", "attr_list"],
     )
     return meta.to_dict(), html
+
+
+def load_docs(docs_dir: Path = DOCS_DIR) -> list[dict]:
+    """Load markdown docs with YAML frontmatter from archive/docs/.
+
+    Returns a list of dicts (frontmatter + ``slug`` / ``body`` / ``has_figures``)
+    shared by the static builder (``build.py``) and the dev-server doc routes
+    (``routes/site.py``). Supports two layouts:
+    - Subdirectory: archive/docs/<slug>/reading.md (with optional figures/)
+    - Flat file:    archive/docs/<slug>.md (legacy)
+    """
+    docs = []
+    if not docs_dir.exists():
+        return docs
+    # Subdirectory layout: <slug>/reading.md
+    for md_file in sorted(docs_dir.glob("*/reading.md")):
+        raw = md_file.read_text(encoding="utf-8")
+        if raw.startswith("---"):
+            _, fm, body = raw.split("---", 2)
+            meta = yaml.safe_load(fm) or {}
+        else:
+            meta, body = {}, raw
+        meta["slug"] = md_file.parent.name
+        meta["body"] = body.strip()
+        meta["has_figures"] = (md_file.parent / "figures").is_dir()
+        meta.setdefault("title", md_file.parent.name)
+        meta.setdefault("date", "")
+        meta.setdefault("summary", "")
+        docs.append(meta)
+    # Legacy flat file layout: <slug>.md
+    for md_file in sorted(docs_dir.glob("*.md")):
+        raw = md_file.read_text(encoding="utf-8")
+        if raw.startswith("---"):
+            _, fm, body = raw.split("---", 2)
+            meta = yaml.safe_load(fm) or {}
+        else:
+            meta, body = {}, raw
+        meta["slug"] = md_file.stem
+        meta["body"] = body.strip()
+        meta["has_figures"] = False
+        meta.setdefault("title", md_file.stem)
+        meta.setdefault("date", "")
+        meta.setdefault("summary", "")
+        docs.append(meta)
+    docs.sort(key=lambda d: d.get("date", ""), reverse=True)
+    return docs

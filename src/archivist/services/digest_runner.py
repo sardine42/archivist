@@ -28,7 +28,6 @@ from archivist.config import (
     PAPERS_BRIEF_DIR,
     PAPERS_DIR,
     get_deploy_settings,
-    get_lark_user_id,
     load_config,
 )
 
@@ -49,7 +48,7 @@ from archivist.services.digest import (
     write_monthly,
     write_weekly,
 )
-from archivist.services.lark_push import LarkPushError, push_digest_to_lark
+from archivist.services.notifier import NotifyError, get_notifier
 
 
 PROMPTS_DIR = Path(__file__).parent / "digest_prompts"
@@ -280,21 +279,23 @@ def _generate_theme(period: str, period_id: str, prepare_data: dict) -> dict:
 # ── Step 5/6: push + deploy ──────────────────────────────────────
 
 
-@_step("Step 5 — push to Lark + pin")
+@_step("Step 5 — push digest notification")
 def _push(period: str, period_id: str, paper_count: int) -> None:
     if paper_count == 0:
-        log.info("  empty digest — skipping Lark push to avoid noise")
+        log.info("  empty digest — skipping push to avoid noise")
         return
-    if not get_lark_user_id():
-        log.info("  lark.notify_user_id not configured — skipping push")
-        return
-    # A push failure (missing/broken lark-cli, auth, network) must not fail the
+    notifier = get_notifier()
+    # A push failure (missing/broken backend, auth, network) must not fail the
     # whole digest or block the deploy that follows — log and continue.
     try:
-        msg_id = push_digest_to_lark(period, period_id)
+        msg_id = notifier.push_digest(period, period_id)
+    except NotifyError as e:
+        log.error(f"  push failed — continuing to deploy: {e}")
+        return
+    if msg_id:
         log.info(f"  sent + pinned: {msg_id}")
-    except LarkPushError as e:
-        log.error(f"  Lark push failed — continuing to deploy: {e}")
+    else:
+        log.info(f"  push backend '{notifier.name}' — skipped")
 
 
 @_step("Step 6 — build + deploy")

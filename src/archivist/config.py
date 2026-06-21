@@ -124,3 +124,8 @@ def get_deploy_settings() -> dict[str, str]:
 
 def get_lark_user_id() -> str:
     return (load_config().get("lark", {}) or {}).get("notify_user_id", "")
+
+
+def get_notify_backend() -> str:
+    """Push backend selector: 'lark' (default) or 'none' (disabled)."""
+    return (load_config().get("notify", {}) or {}).get("backend", "lark")

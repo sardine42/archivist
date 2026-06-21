@@ -967,22 +967,22 @@ def deploy_site(output: str, host: str | None, skip_build: bool):
 @cli.command("notify")
 @click.option("--text", "-t", required=True, help="Plain-text message body.")
 def notify_lark(text: str):
-    """Send a plain-text notification to the configured Lark user.
+    """Send a plain-text notification via the configured notify backend.
 
-    Used by cron wrappers to report job status. Silently no-ops when
-    lark.notify_user_id is unset (minimal-install mode).
+    Used by cron wrappers to report job status. No-ops cleanly when the
+    backend is "none" or not configured (e.g. lark without notify_user_id).
     """
-    from archivist.config import get_lark_user_id
-    if not get_lark_user_id():
-        click.echo("(notify skipped: lark.notify_user_id not configured)")
-        return
-    from archivist.services.lark_push import LarkPushError, send_text_notification
+    from archivist.services.notifier import NotifyError, get_notifier
+    notifier = get_notifier()
     try:
-        msg_id = send_text_notification(text)
-        click.echo(msg_id)
-    except LarkPushError as e:
-        click.echo(f"lark notify failed: {e}", err=True)
+        msg_id = notifier.send_text(text)
+    except NotifyError as e:
+        click.echo(f"notify failed: {e}", err=True)
         raise SystemExit(1)
+    if msg_id:
+        click.echo(msg_id)
+    else:
+        click.echo(f"(notify skipped: backend={notifier.name})")
 
 
 # ── Search command ──────────────────────────────────────────

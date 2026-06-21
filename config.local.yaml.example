@@ -15,6 +15,11 @@ deploy:
   remote_site_path: "~/site"
   remote_archive_path: "~/archive"
 
+notify:
+  # Push backend: "lark" (Feishu via lark-cli) or "none" (disable push).
+  # Defaults to "lark" from config.yaml; set "none" to turn push off.
+  backend: lark
+
 lark:
   # Open ID of the Lark user that receives digest notifications + pinned
   # messages. Discover with: lark-cli contact +get-user

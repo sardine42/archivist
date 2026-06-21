@@ -24,6 +24,21 @@ class LarkPushError(RuntimeError):
     pass
 
 
+def _run_lark(args: list[str]) -> subprocess.CompletedProcess:
+    """Invoke ``lark-cli`` with *args*, converting a missing binary into a
+    ``LarkPushError``. Lets callers treat "lark-cli not installed" the same as
+    any other push failure (skip + continue) instead of crashing on an
+    uncaught ``FileNotFoundError``.
+    """
+    try:
+        return subprocess.run(["lark-cli", *args], capture_output=True, text=True)
+    except FileNotFoundError as e:
+        raise LarkPushError(
+            "lark-cli not found on PATH — install and authorize it, or unset "
+            "lark.notify_user_id in config.local.yaml to disable push"
+        ) from e
+
+
 def _digest_md_path(period_type: str, digest_id: str, year: int = 2026) -> Path:
     return DIGESTS_DIR / str(year) / period_type / f"{digest_id}.md"
 
@@ -42,15 +57,12 @@ def _send_message(body: str, *, markdown: bool = True) -> str:
     if not user_id:
         raise LarkPushError("lark.notify_user_id not configured in config.yaml")
     flag = "--markdown" if markdown else "--text"
-    proc = subprocess.run(
-        [
-            "lark-cli", "im", "+messages-send",
-            "--as", "bot",
-            "--user-id", user_id,
-            flag, body,
-        ],
-        capture_output=True, text=True,
-    )
+    proc = _run_lark([
+        "im", "+messages-send",
+        "--as", "bot",
+        "--user-id", user_id,
+        flag, body,
+    ])
     if proc.returncode != 0:
         raise LarkPushError(
             f"lark-cli +messages-send exited {proc.returncode}: {proc.stderr[:500]}"
@@ -65,14 +77,11 @@ def _send_message(body: str, *, markdown: bool = True) -> str:
 
 
 def _pin_message(message_id: str) -> None:
-    proc = subprocess.run(
-        [
-            "lark-cli", "im", "pins", "create",
-            "--as", "bot",
-            "--data", json.dumps({"message_id": message_id}),
-        ],
-        capture_output=True, text=True,
-    )
+    proc = _run_lark([
+        "im", "pins", "create",
+        "--as", "bot",
+        "--data", json.dumps({"message_id": message_id}),
+    ])
     if proc.returncode != 0:
         raise LarkPushError(
             f"lark-cli pins create exited {proc.returncode}: {proc.stderr[:500]}"

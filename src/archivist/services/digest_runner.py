@@ -288,8 +288,13 @@ def _push(period: str, period_id: str, paper_count: int) -> None:
     if not get_lark_user_id():
         log.info("  lark.notify_user_id not configured — skipping push")
         return
-    msg_id = push_digest_to_lark(period, period_id)
-    log.info(f"  sent + pinned: {msg_id}")
+    # A push failure (missing/broken lark-cli, auth, network) must not fail the
+    # whole digest or block the deploy that follows — log and continue.
+    try:
+        msg_id = push_digest_to_lark(period, period_id)
+        log.info(f"  sent + pinned: {msg_id}")
+    except LarkPushError as e:
+        log.error(f"  Lark push failed — continuing to deploy: {e}")
 
 
 @_step("Step 6 — build + deploy")

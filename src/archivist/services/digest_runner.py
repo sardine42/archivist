@@ -227,6 +227,8 @@ def _score_candidates(candidates: list) -> list[dict]:
 @_step("Step 3 — deep read top-k papers via claude -p /read-paper")
 def _deep_read_top_k(candidates: list, score_results: list[dict]) -> list[str]:
     """Pick papers with score >= threshold, top_k_deep_read, run /read-paper serial."""
+    from archivist.services.arxiv_scorer import deep_read_allowed
+
     config = load_config().get("arxiv", {})
     threshold = config.get("deep_read_threshold", 7)
     top_k = config.get("top_k_deep_read", 6)
@@ -242,6 +244,17 @@ def _deep_read_top_k(candidates: list, score_results: list[dict]) -> list[str]:
         except (TypeError, ValueError):
             continue
         if score < threshold:
+            continue
+        # Recommendation papers need industry participation; academia-only rec
+        # papers get a brief but no deep read. Filter before top_k so they don't
+        # consume a slot. Never silent — log what was dropped.
+        if not deep_read_allowed(
+            r.get("category"), tags=r.get("tags"), affiliations=c.paper.affiliations
+        ):
+            log.info(
+                f"  ⊘ skip deep-read (rec paper, academia-only): "
+                f"{_strip_v(c.paper.arxiv_id)} | {c.paper.title[:60]}"
+            )
             continue
         paired.append((score, c, r))
     paired.sort(key=lambda x: -x[0])

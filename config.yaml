@@ -44,6 +44,12 @@ arxiv:
   max_results_per_category: 100
   top_k_deep_read: 6
   deep_read_threshold: 7  # Min score to enter deep reading (4-6 → brief archive only)
+  # 推荐算法论文(generative-rec / discriminative-rec)仅在有工业界参与时才精读,
+  # 纯学术论文只写 brief、不精读。工业界判定 = 评分时打的 `industrial` tag(LLM 据
+  # 摘要的线上 A/B、生产部署、平台规模判断;arxiv 几乎不带作者机构,故不能靠机构字段),
+  # 兜底再看 affiliations→companies 列表。置 false 关闭过滤,恢复"达阈值即精读"。
+  # LLM / other 类不受影响。
+  deep_read_rec_requires_industry: true
 
 scoring:
   # 推荐系统关键词 (标题/摘要匹配, 命中即加分)

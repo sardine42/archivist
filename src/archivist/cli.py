@@ -706,7 +706,11 @@ def arxiv_apply_scores(date: str, scores_path: str, candidates_path: str | None)
     import json
     from archivist.config import load_config
     from archivist.services.arxiv_fetch import RawPaper
-    from archivist.services.arxiv_scorer import CandidatePaper, archive_scored_paper
+    from archivist.services.arxiv_scorer import (
+        CandidatePaper,
+        archive_scored_paper,
+        deep_read_allowed,
+    )
 
     cand_file = Path(candidates_path) if candidates_path else PAPERS_DIR / f"_candidates_{date}.json"
     if not cand_file.exists():
@@ -728,6 +732,7 @@ def arxiv_apply_scores(date: str, scores_path: str, candidates_path: str | None)
 
     written = 0
     shortlist = []
+    filtered_rec_academia = []
     for c in candidates:
         aid = c.get("arxiv_id", "")
         score_result = by_id.get(aid) or by_id.get(_strip_v(aid))
@@ -753,13 +758,23 @@ def arxiv_apply_scores(date: str, scores_path: str, candidates_path: str | None)
         except (TypeError, ValueError):
             sc = 0.0
         if sc >= threshold and not cand.is_existing:
-            shortlist.append({"arxiv_id": _strip_v(aid), "title": raw.title, "score": sc})
+            # Rec papers need industry participation to be deep-read; academia-only
+            # rec papers get a brief but are dropped from the shortlist.
+            if deep_read_allowed(
+                score_result.get("category"),
+                tags=score_result.get("tags"),
+                affiliations=raw.affiliations,
+            ):
+                shortlist.append({"arxiv_id": _strip_v(aid), "title": raw.title, "score": sc})
+            else:
+                filtered_rec_academia.append(_strip_v(aid))
 
     shortlist.sort(key=lambda x: -x["score"])
-    click.echo(json.dumps(
-        {"date": date, "briefs_written": written, "shortlist": shortlist[:top_k]},
-        ensure_ascii=False, indent=2,
-    ))
+    output = {"date": date, "briefs_written": written, "shortlist": shortlist[:top_k]}
+    if filtered_rec_academia:
+        # Surface what the industry filter dropped — never silent.
+        output["filtered_rec_academia"] = filtered_rec_academia
+    click.echo(json.dumps(output, ensure_ascii=False, indent=2))
 
 
 @arxiv_group.command("download")

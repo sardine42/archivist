@@ -50,6 +50,7 @@ description: 会话内 ArXiv 日报编排(subagent 版)。确定性步骤直接�
 .venv/bin/archivist arxiv apply-scores --date <DATE> --scores /tmp/scores_<DATE>.json
 ```
 - 写 brief(score≥4 且未归档),并回吐 `shortlist`(score≥7、未归档、top-6)。
+- **工业界过滤**:推荐算法论文(generative-rec / discriminative-rec)仅在有工业界参与时才进 `shortlist`;纯学术推荐论文只写 brief、不精读(LLM / other 类不受影响)。工业界判定 = 评分时打的 `industrial` tag(Step 2 评分已据摘要判断,所以这步零额外成本)。被过滤的篇目在输出 JSON 的 `filtered_rec_academia` 里列出——不静默。由 `config.yaml` 的 `arxiv.deep_read_rec_requires_industry` 控制(默认 true)。
 - `shortlist` 为空 → 跳到 Step 4(有候选但无精读项,仍出日报)。
 
 ## Step 3 — 精读(并行 subagents · LLM)

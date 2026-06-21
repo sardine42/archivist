@@ -39,6 +39,52 @@ def _arxiv_version(aid: str) -> int:
     return 1
 
 
+# Recommendation-algorithm categories — papers here are only deep-read when
+# industry participates (see deep_read_allowed).
+REC_CATEGORIES = ("generative-rec", "discriminative-rec")
+
+
+def has_industry_signal(tags, affiliations) -> bool:
+    """Whether a paper shows industry participation, at scoring time.
+
+    Primary signal is the scorer's ``industrial`` tag — the LLM already judges
+    industry-vs-academic from the abstract (online A/B, production deployment,
+    platform scale) and tags it. This is the only reliable signal pre-deep-read,
+    since arxiv almost never carries author affiliations (they get filled only
+    after the PDF is read). Fallback: match affiliations against the companies
+    list (same as the digest's 🏢 badge) on the rare paper that has them.
+    """
+    if any("industrial" in str(t).lower() for t in (tags or [])):
+        return True
+    from archivist.web.data import normalize_company
+
+    return bool(normalize_company(list(affiliations or [])))
+
+
+def deep_read_allowed(category, tags=None, affiliations=None) -> bool:
+    """Deep-read eligibility gate applied on top of score / top_k.
+
+    Recommendation-algorithm papers (generative-rec / discriminative-rec) are
+    only deep-read when industry participates; academia-only rec papers are
+    filtered out — they still get a brief, just no deep read. Non-rec papers
+    (llm / other) always pass.
+
+    Toggle via config arxiv.deep_read_rec_requires_industry (default True).
+    """
+    if not load_config().get("arxiv", {}).get(
+        "deep_read_rec_requires_industry", True
+    ):
+        return True
+    cats = (
+        category
+        if isinstance(category, (list, tuple))
+        else ([category] if category else [])
+    )
+    if not any(c in REC_CATEGORIES for c in cats):
+        return True
+    return has_industry_signal(tags, affiliations)
+
+
 def _coerce_category(value) -> list[str]:
     """Coerce a category value (str | list | None) to a non-empty list[str]."""
     if value is None:

@@ -261,6 +261,10 @@ companies:
     keywords: [Zalando]
   - name: Naver
     keywords: [Naver, NAVER, Navercorp]
+  - name: Ant Group
+    keywords: [Ant Group, MyBank, 蚂蚁]
+  - name: Nokia
+    keywords: [Nokia]
 
 # Flat tag whitelist. Each tag must:
 #   1) Have a clear semantic boundary (no synonyms with other tags)

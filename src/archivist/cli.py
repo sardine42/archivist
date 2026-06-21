@@ -157,13 +157,15 @@ def paper_show(slug: str):
 @click.option("--reading-score", type=float, help="Set reading score (1-10)")
 @click.option("--published-date", help="Set published date (YYYY-MM-DD)")
 @click.option("--url", help="Set ArXiv URL")
+@click.option("--arxiv-id", help="Set arXiv ID (e.g. 1234.56789 or 1234.56789v1). Normally set by download-paper.py; use this only when that flow failed.")
 def paper_edit(slug: str, tags: str | None, proposed_tags: str | None,
                allow_new_tag: tuple[str, ...],
                status: str | None, rating: int | None,
                rating_reason: str | None, feedback_consumed: bool | None,
                category: str | None, title: str | None, model_name: str | None,
                reading_score: float | None,
-               published_date: str | None, url: str | None):
+               published_date: str | None, url: str | None,
+               arxiv_id: str | None):
     """Edit paper metadata (writes to meta.json).
 
     Feedback note: setting --rating alone (with or without --rating-reason) only
@@ -208,6 +210,8 @@ def paper_edit(slug: str, tags: str | None, proposed_tags: str | None,
         kwargs["published_date"] = published_date
     if url is not None:
         kwargs["url"] = url
+    if arxiv_id is not None:
+        kwargs["arxiv_id"] = arxiv_id
 
     if not kwargs:
         click.echo("No changes specified.")

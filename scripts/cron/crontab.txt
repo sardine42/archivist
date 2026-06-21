@@ -17,16 +17,16 @@
 
 CRON_TZ=Asia/Shanghai
 
-# Daily digest — Mon-Fri at 09:00, aligned with ArXiv announcement cycle.
-# ArXiv announces Sun-Thu at ET 20:00 (= Beijing 09:00 next day), no Fri/Sat
-# announcements per https://info.arxiv.org/help/availability.html.
+# Daily digest — Mon-Fri at 10:00 (= 02:00 UTC), one hour past ArXiv's
+# announcement window (ET 20:00 Sun-Thu = 01:00 UTC = Beijing 09:00 next day)
+# to avoid the post-announce 429 rate-limit storm.
 # Coverage (see _coverage_range): Mon→Fri only, Tue→Sat-Mon (weekend batch),
 # Wed/Thu/Fri→previous day.
-0 9 * * 1-5  /path/to/archivist/scripts/cron/daily-digest.sh
+0 10 * * 1-5  /path/to/archivist/scripts/cron/daily-digest.sh
 
-# Weekly digest — every Tuesday at 09:30 (covers the previous ISO week,
+# Weekly digest — every Tuesday at 10:30 (covers the previous ISO week,
 # runs after daily digest to include all 5 daily reports)
-30 9 * * 2   /path/to/archivist/scripts/cron/weekly-digest.sh
+30 10 * * 2   /path/to/archivist/scripts/cron/weekly-digest.sh
 
 # Monthly digest — 1st of every month at 10:00 (covers the previous month)
 0 10 1 * *   /path/to/archivist/scripts/cron/monthly-digest.sh

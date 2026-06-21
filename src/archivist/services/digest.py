@@ -41,8 +41,8 @@ def _coverage_range(date: str) -> tuple[str, str]:
 
     Aligned with ArXiv announcement cycle (ET 20:00, Sun-Thu only — no Fri/Sat
     announcements per https://info.arxiv.org/help/availability.html).
-    The digest runs Mon-Fri at 09:00 Beijing time (= prev day 21:00 ET), one
-    hour after each ArXiv announcement window.
+    The digest runs Mon-Fri at 10:00 Beijing time (= 02:00 UTC), two hours
+    after each ArXiv announcement window — past the post-announce 429 storm.
 
     Rule: a digest generated on date D covers ArXiv submissions from:
     - Mon → Friday only (catches the Sun ET 20:00 announcement of Thu-Fri batch)

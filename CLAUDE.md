@@ -54,3 +54,12 @@ archivist paper edit <slug> --rating N --rating-reason "..."
 5. `archivist paper edit <slug> --feedback-consumed` 标记处理完成
 
 `archive/criteria/` 与 `archive/papers/` 都是 gitignored 个人数据，反馈闭环不产生 git commit。
+
+# 定时调度
+
+日报/周报/月报有两条独立调度路径，共用同一条流水线 + 同一套互斥护栏（`/tmp/archivist-digest.lock` + `run_daily` 幂等护栏），**绝不双跑**。完整手册见 `docs/SCHEDULING.md`。
+
+- **系统 cron**（headless，无人值守）：启用接口 `scripts/cron/install.sh`（`--uninstall` / `--show`），幂等写入 crontab 的标记块，调用三个 `scripts/cron/*-digest.sh` wrapper。
+- **会话内调度**（remote-control 会话，逐篇自愈 + 实时推送）：启用接口 `/schedule-digest` skill，在会话内用 `CronCreate` 注册工作日触发 `/run-digest`。有 LLM + 部署成本，arm 前必须向用户确认。
+
+两路二选一即可，同开也安全。结局始终落 `logs/cron/` 日志，即便推送关闭也不静默。

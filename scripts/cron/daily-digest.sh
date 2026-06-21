@@ -67,14 +67,25 @@ ELAPSED=$(($(date +%s) - START))
 case $EXIT in
     0)  if grep -q "daily digest skipped (empty)" "$RUN_LOG"; then
             NOTE="📭 daily-digest 空日 — 0 候选 (${ELAPSED}s)"
+        elif grep -q "daily digest skipped (exists)" "$RUN_LOG"; then
+            NOTE="📅 daily-digest 跳过 — 当日 digest 已存在 (${ELAPSED}s)"
         else
             NOTE="✅ daily-digest 完成 (${ELAPSED}s)"
+            # Partial deep-read failures still exit 0 (digest is usable) but must
+            # never be silent — surface them in the outcome.
+            if grep -q "deep-read failures" "$RUN_LOG"; then
+                NOTE="${NOTE}
+⚠️ $(grep -o 'deep-read failures.*' "$RUN_LOG" | tail -1)"
+            fi
         fi ;;
     75) NOTE="⚠️ daily-digest 跳过：另一 digest 实例正在运行" ;;
     *)  NOTE="❌ daily-digest 失败 exit=${EXIT} (${ELAPSED}s)
 日志：${LOG_FILE}" ;;
 esac
 
+# Always record the outcome in the run log, regardless of push backend — a
+# disabled/none notifier must still leave a trace. Never silent.
+echo "==== $(date -Iseconds) outcome: ${NOTE} ====" >> "$LOG_FILE"
 "$ARCHIVIST" notify --text "$NOTE" >> "$LOG_FILE" 2>&1 || true
 
 exit $EXIT

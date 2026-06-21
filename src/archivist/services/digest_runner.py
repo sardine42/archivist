@@ -256,6 +256,7 @@ def _deep_read_top_k(candidates: list, score_results: list[dict]) -> list[str]:
         log.info(f"    score={s:.0f} {c.paper.arxiv_id} | {c.paper.title[:70]}")
 
     succeeded = []
+    failed = []
     for score, c, _ in selected:
         arxiv_id = _strip_v(c.paper.arxiv_id)
         title = c.paper.title.replace('"', '\\"')
@@ -278,7 +279,10 @@ def _deep_read_top_k(candidates: list, score_results: list[dict]) -> list[str]:
         if landed:
             succeeded.append(arxiv_id)
         else:
+            failed.append(arxiv_id)
             log.error(f"  /read-paper {arxiv_id} FAILED — not archived after retry; continuing")
+    if failed:
+        log.warning(f"  ⚠️ deep-read failures {len(failed)}/{len(selected)}: {', '.join(failed)}")
     log.info(f"  deep read summary: {len(succeeded)}/{len(selected)} archived")
     return succeeded
 

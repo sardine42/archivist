@@ -44,6 +44,8 @@ case $EXIT in
 日志：${LOG_FILE}" ;;
 esac
 
+# Always record the outcome in the run log, regardless of push backend.
+echo "==== $(date -Iseconds) outcome: ${NOTE} ====" >> "$LOG_FILE"
 "$ARCHIVIST" notify --text "$NOTE" >> "$LOG_FILE" 2>&1 || true
 
 exit $EXIT

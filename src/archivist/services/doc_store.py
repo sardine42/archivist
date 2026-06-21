@@ -4,9 +4,11 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
+
 from archivist.config import DOCS_DIR
 from archivist.models import DocMeta
-from archivist.utils import generate_id, read_json, read_text, slugify, write_json, write_text
+from archivist.utils import generate_id, read_text, slugify, write_text
 
 
 def add_doc(
@@ -42,18 +44,60 @@ def add_doc(
 
     doc_dir.mkdir(parents=True, exist_ok=True)
 
-    write_text(doc_dir / "content.md", doc_content)
-
     meta = DocMeta(
-        id=generate_id(),
+        id=slug,
         title=title,
         slug=slug,
         description=description,
         tags=tags or [],
-        category=category,
+        category=category or "internal-doc",
     )
-    write_json(doc_dir / "meta.json", meta.to_dict())
+    # Write as reading.md + YAML frontmatter — the canonical doc layout the
+    # website, CLI, and MCP all read (see _parse_reading / web _load_docs).
+    frontmatter = {
+        "title": meta.title,
+        "type": meta.category,
+        "date": meta.date_created[:10],
+        "summary": meta.description,
+        "tags": meta.tags,
+    }
+    fm = yaml.safe_dump(frontmatter, allow_unicode=True, sort_keys=False).strip()
+    write_text(doc_dir / "reading.md", f"---\n{fm}\n---\n\n{doc_content}\n")
     return meta
+
+
+def _parse_reading(md_file: Path) -> tuple[DocMeta, str]:
+    """Parse a ``docs/<slug>/reading.md`` into ``(DocMeta, body)``.
+
+    Docs are written by the ``/read-doc`` skill as ``reading.md`` with YAML
+    frontmatter (``title / source / type / date / team / summary``) — there is
+    no ``meta.json``. We synthesize a ``DocMeta`` from the frontmatter so the
+    CLI and MCP doc tools see exactly the docs the website does (which reads
+    the same layout via ``web/build.py:_load_docs``).
+    """
+    raw = read_text(md_file)
+    fm: dict = {}
+    body = raw
+    if raw.startswith("---"):
+        parts = raw.split("---", 2)
+        if len(parts) == 3:
+            fm = yaml.safe_load(parts[1]) or {}
+            body = parts[2]
+
+    slug = md_file.parent.name
+    date = str(fm.get("date", "") or "")
+    meta = DocMeta(
+        id=slug,
+        title=str(fm.get("title", "") or slug),
+        slug=slug,
+        description=str(fm.get("summary", "") or ""),
+        tags=fm.get("tags") or [],
+        category=str(fm.get("type", "") or ""),
+        generated_by=str(fm.get("generated_by", "") or ""),
+        date_created=date,
+        date_modified=date,
+    )
+    return meta, body.strip()
 
 
 def list_docs(
@@ -65,9 +109,8 @@ def list_docs(
     if not DOCS_DIR.exists():
         return docs
 
-    for meta_file in DOCS_DIR.rglob("meta.json"):
-        data = read_json(meta_file)
-        doc = DocMeta.from_dict(data)
+    for md_file in DOCS_DIR.glob("*/reading.md"):
+        doc, _ = _parse_reading(md_file)
         if tag and tag not in doc.tags:
             continue
         if category and doc.category != category:
@@ -79,17 +122,11 @@ def list_docs(
 
 
 def get_doc(slug: str) -> tuple[DocMeta, str] | None:
-    """Get a document's metadata and content by slug."""
-    doc_dir = DOCS_DIR / slug
-    meta_file = doc_dir / "meta.json"
-    content_file = doc_dir / "content.md"
-
-    if not meta_file.exists():
+    """Get a document's metadata and content (reading.md body) by slug."""
+    md_file = DOCS_DIR / slug / "reading.md"
+    if not md_file.exists():
         return None
-
-    meta = DocMeta.from_dict(read_json(meta_file))
-    content = read_text(content_file) if content_file.exists() else ""
-    return meta, content
+    return _parse_reading(md_file)
 
 
 def remove_doc(slug: str) -> bool:

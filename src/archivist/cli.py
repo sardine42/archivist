@@ -994,8 +994,6 @@ def notify_lark(text: str):
 @click.option("--tag", help="Filter by tag")
 def search(query: str, doc_type: str, tag: str | None):
     """Search papers and documents by keyword."""
-    from archivist.config import DOCS_DIR
-
     results = []
     query_lower = query.lower()
 
@@ -1031,23 +1029,20 @@ def search(query: str, doc_type: str, tag: str | None):
 
     # Search docs
     if doc_type in ("doc", "all"):
-        for meta_file in DOCS_DIR.rglob("meta.json"):
-            data = doc_store.read_json(meta_file)
-            if tag and tag not in data.get("tags", []):
+        for meta in doc_store.list_docs():
+            if tag and tag not in meta.tags:
                 continue
             searchable = " ".join([
-                data.get("title", ""),
-                data.get("description", ""),
-                " ".join(data.get("tags", [])),
+                meta.title,
+                meta.description,
+                " ".join(meta.tags),
             ]).lower()
             if query_lower in searchable:
-                results.append(("doc", data.get("slug", ""), data.get("title", "")))
+                results.append(("doc", meta.slug, meta.title))
                 continue
-            content_file = meta_file.parent / "content.md"
-            if content_file.exists():
-                content = content_file.read_text(encoding="utf-8").lower()
-                if query_lower in content:
-                    results.append(("doc", data.get("slug", ""), data.get("title", "")))
+            loaded = doc_store.get_doc(meta.slug)
+            if loaded and query_lower in loaded[1].lower():
+                results.append(("doc", meta.slug, meta.title))
 
     if not results:
         click.echo(f"No results for: {query}")
@@ -1069,7 +1064,6 @@ def tags():
     tag_counts: Counter[str] = Counter()
 
     from itertools import chain
-    from archivist.config import DOCS_DIR
     paper_metas = chain(
         PAPERS_DIR.rglob("meta.json") if PAPERS_DIR.exists() else [],
         PAPERS_BRIEF_DIR.rglob("meta.json") if PAPERS_BRIEF_DIR.exists() else [],
@@ -1078,9 +1072,8 @@ def tags():
         data = paper_store.read_json(meta_file)
         for t in data.get("tags", []):
             tag_counts[t] += 1
-    for meta_file in DOCS_DIR.rglob("meta.json"):
-        data = doc_store.read_json(meta_file)
-        for t in data.get("tags", []):
+    for meta in doc_store.list_docs():
+        for t in meta.tags:
             tag_counts[t] += 1
 
     if not tag_counts:
@@ -1094,11 +1087,9 @@ def tags():
 @cli.command()
 def stats():
     """Show archive statistics."""
-    from archivist.config import DOCS_DIR
-
     read_count = sum(1 for _ in PAPERS_DIR.rglob("meta.json")) if PAPERS_DIR.exists() else 0
     brief_count = sum(1 for _ in PAPERS_BRIEF_DIR.rglob("meta.json")) if PAPERS_BRIEF_DIR.exists() else 0
-    doc_count = sum(1 for _ in DOCS_DIR.rglob("meta.json")) if DOCS_DIR.exists() else 0
+    doc_count = len(doc_store.list_docs())
 
     click.echo(f"Papers (精读):   {read_count}")
     click.echo(f"Papers (摘要):   {brief_count}")

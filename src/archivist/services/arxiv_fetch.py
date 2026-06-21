@@ -17,9 +17,13 @@ MAX_RETRIES = 4
 RATELIMIT_BACKOFF = 600           # 10min fixed — outlast ArXiv rate-limit (429) windows
 NETWORK_BACKOFF = [5, 15, 30, 60]  # transient network / truncated-read errors — retry quickly
 
+# An empty ProxyHandler bypasses environment and system proxies for metadata
+# fetches and PDF downloads, avoiding failures from an unavailable proxy.
+_NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 
 def _urlopen_with_retry(req, timeout=60):
-    """urlopen + read with retry.
+    """urlopen + read with retry, bypassing any configured proxy.
 
     - 429 / 5xx (rate-limit / server): long fixed backoff to outlast the window.
     - network / truncated-read errors (URLError, timeout, OSError, and
@@ -28,7 +32,7 @@ def _urlopen_with_retry(req, timeout=60):
     """
     for attempt in range(MAX_RETRIES + 1):
         try:
-            return urllib.request.urlopen(req, timeout=timeout).read()
+            return _NO_PROXY_OPENER.open(req, timeout=timeout).read()
         except urllib.error.HTTPError as e:
             if e.code in (429, 500, 503) and attempt < MAX_RETRIES:
                 print(f"  ArXiv API {e.code}, retry {attempt+1}/{MAX_RETRIES} in {RATELIMIT_BACKOFF}s...")

@@ -1,5 +1,6 @@
 """Arxiv API client for fetching recent papers."""
 
+import http.client
 import time
 import urllib.request
 import urllib.parse
@@ -13,25 +14,31 @@ ATOM_NS = "{http://www.w3.org/2005/Atom}"
 ARXIV_NS = "{http://arxiv.org/schemas/atom}"
 
 MAX_RETRIES = 4
-RETRY_BACKOFF = [600, 600, 600, 600]  # 10min fixed interval to outlast rate-limit windows
+RATELIMIT_BACKOFF = 600           # 10min fixed — outlast ArXiv rate-limit (429) windows
+NETWORK_BACKOFF = [5, 15, 30, 60]  # transient network / truncated-read errors — retry quickly
 
 
 def _urlopen_with_retry(req, timeout=60):
-    """urlopen with exponential backoff on 429/5xx/network errors."""
+    """urlopen + read with retry.
+
+    - 429 / 5xx (rate-limit / server): long fixed backoff to outlast the window.
+    - network / truncated-read errors (URLError, timeout, OSError, and
+      ``http.client.HTTPException`` such as ``IncompleteRead``): short escalating
+      backoff — these are usually transient one-offs, not rate limits.
+    """
     for attempt in range(MAX_RETRIES + 1):
         try:
             return urllib.request.urlopen(req, timeout=timeout).read()
         except urllib.error.HTTPError as e:
             if e.code in (429, 500, 503) and attempt < MAX_RETRIES:
-                wait = RETRY_BACKOFF[attempt]
-                print(f"  ArXiv API {e.code}, retry {attempt+1}/{MAX_RETRIES} in {wait}s...")
-                time.sleep(wait)
+                print(f"  ArXiv API {e.code}, retry {attempt+1}/{MAX_RETRIES} in {RATELIMIT_BACKOFF}s...")
+                time.sleep(RATELIMIT_BACKOFF)
             else:
                 raise
-        except (urllib.error.URLError, TimeoutError, OSError) as e:
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as e:
             if attempt < MAX_RETRIES:
-                wait = RETRY_BACKOFF[attempt]
-                print(f"  ArXiv network error ({e}), retry {attempt+1}/{MAX_RETRIES} in {wait}s...")
+                wait = NETWORK_BACKOFF[min(attempt, len(NETWORK_BACKOFF) - 1)]
+                print(f"  ArXiv network error ({type(e).__name__}: {e}), retry {attempt+1}/{MAX_RETRIES} in {wait}s...")
                 time.sleep(wait)
             else:
                 raise

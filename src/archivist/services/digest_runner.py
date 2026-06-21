@@ -25,6 +25,7 @@ from typing import Any
 
 from archivist.config import (
     ARCHIVE_ROOT,
+    DIGESTS_DIR,
     PAPERS_BRIEF_DIR,
     PAPERS_DIR,
     get_deploy_settings,
@@ -319,9 +320,18 @@ def _deploy() -> None:
 # ── Public entry points ──────────────────────────────────────────
 
 
-def run_daily(date_str: str | None = None) -> None:
+def run_daily(date_str: str | None = None, force: bool = False) -> None:
     date = date_str or _today_iso()
     log.info(f"╔══ daily digest run for {date} ══╗")
+
+    # Idempotency guard: if this date's digest already exists, skip the whole
+    # (expensive) pipeline unless forced. Lets the OS-cron wrapper and the
+    # in-session scheduler coexist without double-running the same day.
+    existing = DIGESTS_DIR / date[:4] / "daily" / f"{date}.md"
+    if existing.exists() and not force:
+        log.info(f"  digest already exists ({existing.name}) — skipping (use --force to regenerate)")
+        log.info(f"╚══ daily digest skipped (exists) for {date} ══╝")
+        return
 
     coverage_start, coverage_end = _coverage_range(date)
     log.info(f"  coverage range: {coverage_start} ~ {coverage_end}")

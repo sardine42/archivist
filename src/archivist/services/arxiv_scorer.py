@@ -246,6 +246,7 @@ def candidates_to_json(candidates: list[CandidatePaper]) -> list[dict]:
             "arxiv_id": c.paper.arxiv_id,
             "title": c.paper.title,
             "authors": c.paper.authors[:5],
+            "affiliations": c.paper.affiliations,
             "abstract": c.paper.abstract,
             "categories": c.paper.categories,
             "pdf_url": c.paper.pdf_url,

@@ -685,6 +685,83 @@ def arxiv_fetch(date: str | None, date_from: str | None, date_to: str | None,
     click.echo(f"Next: run `archivist digest run` to score, deep-read top papers, and generate the digest.")
 
 
+@arxiv_group.command("apply-scores")
+@click.option("--date", "-d", required=True,
+              help="Digest date (YYYY-MM-DD); locates _candidates_<date>.json.")
+@click.option("--scores", "scores_path", required=True,
+              help="Agent-produced scores JSON (list of {arxiv_id, score, tags, category, "
+                   "summary_zh, summary_en, score_reason, model_name, ...}).")
+@click.option("--candidates", "candidates_path", default=None,
+              help="Override candidates file path (default: _candidates_<date>.json).")
+def arxiv_apply_scores(date: str, scores_path: str, candidates_path: str | None):
+    """Apply agent scores: write brief metas + emit the deep-read shortlist.
+
+    The script half of the subagent scoring step: reads the candidates file
+    (from `arxiv fetch`) plus an agent-produced scores JSON, writes a brief
+    meta.json per scored paper (score>=4, not already archived), and prints
+    JSON {briefs_written, shortlist} where `shortlist` is the deep-read set
+    (score>=deep_read_threshold, not existing, top_k) for the orchestrator to
+    fan out `/read-paper` over.
+    """
+    import json
+    from archivist.config import load_config
+    from archivist.services.arxiv_fetch import RawPaper
+    from archivist.services.arxiv_scorer import CandidatePaper, archive_scored_paper
+
+    cand_file = Path(candidates_path) if candidates_path else PAPERS_DIR / f"_candidates_{date}.json"
+    if not cand_file.exists():
+        raise click.ClickException(f"candidates file not found: {cand_file}")
+    candidates = json.loads(cand_file.read_text(encoding="utf-8")).get("candidates", [])
+
+    scores_raw = json.loads(Path(scores_path).read_text(encoding="utf-8"))
+    if isinstance(scores_raw, dict):
+        scores_raw = scores_raw.get("scores", [])
+    by_id = {s.get("arxiv_id"): s for s in scores_raw if s.get("arxiv_id")}
+
+    def _strip_v(aid: str) -> str:
+        head, _, tail = aid.rpartition("v")
+        return head if (tail.isdigit() and head) else aid
+
+    arxiv_cfg = load_config().get("arxiv", {})
+    threshold = arxiv_cfg.get("deep_read_threshold", 7)
+    top_k = arxiv_cfg.get("top_k_deep_read", 6)
+
+    written = 0
+    shortlist = []
+    for c in candidates:
+        aid = c.get("arxiv_id", "")
+        score_result = by_id.get(aid) or by_id.get(_strip_v(aid))
+        if not score_result:
+            continue
+        raw = RawPaper(
+            arxiv_id=aid,
+            title=c.get("title", ""),
+            authors=list(c.get("authors", [])),
+            affiliations=list(c.get("affiliations", [])),
+            abstract=c.get("abstract", ""),
+            categories=list(c.get("categories", [])),
+            published=c.get("published", ""),
+            pdf_url=c.get("pdf_url", ""),
+        )
+        cand = CandidatePaper(paper=raw)
+        cand.is_existing = bool(c.get("is_existing", False))
+        cand.is_update = bool(c.get("is_update", False))
+        if archive_scored_paper(cand, score_result):
+            written += 1
+        try:
+            sc = float(score_result.get("score", 0))
+        except (TypeError, ValueError):
+            sc = 0.0
+        if sc >= threshold and not cand.is_existing:
+            shortlist.append({"arxiv_id": _strip_v(aid), "title": raw.title, "score": sc})
+
+    shortlist.sort(key=lambda x: -x["score"])
+    click.echo(json.dumps(
+        {"date": date, "briefs_written": written, "shortlist": shortlist[:top_k]},
+        ensure_ascii=False, indent=2,
+    ))
+
+
 @arxiv_group.command("download")
 @click.argument("arxiv_id")
 @click.option("--title", "-t", help="Paper title")
@@ -757,6 +834,40 @@ def _arxiv_slug(title: str) -> str:
 def digest_group():
     """Generate daily/weekly/monthly digest reports."""
     pass
+
+
+@digest_group.command("fetch-candidates")
+@click.option("--date", "-d", required=True, help="Digest date (YYYY-MM-DD).")
+def cmd_digest_fetch_candidates(date: str):
+    """Fetch + pre-filter candidates for a digest date's coverage range.
+
+    The script half of Step 1 for the in-session subagent orchestrator: resolves
+    the coverage range (weekend-aware), fetches + dedups exactly like the
+    headless pipeline, writes _candidates_<date>.json (for `arxiv apply-scores`),
+    and prints JSON {date, coverage, total_candidates, candidates_file}.
+    """
+    import json
+    from archivist.services.digest import _coverage_range
+    from archivist.services.digest_runner import _fetch_candidates
+    from archivist.services.arxiv_scorer import candidates_to_json
+    from archivist.utils import write_json
+
+    ensure_archive_dirs()
+    start, end = _coverage_range(date)
+    candidates = _fetch_candidates(start, end)
+    out_file = PAPERS_DIR / f"_candidates_{date}.json"
+    write_json(out_file, {
+        "date": date,
+        "coverage": [start, end],
+        "total_candidates": len(candidates),
+        "candidates": candidates_to_json(candidates),
+    })
+    click.echo(json.dumps({
+        "date": date,
+        "coverage": [start, end],
+        "total_candidates": len(candidates),
+        "candidates_file": str(out_file),
+    }, ensure_ascii=False))
 
 
 @digest_group.command("daily-prepare")
@@ -854,11 +965,17 @@ def cmd_digest_list():
 @digest_group.command("run")
 @click.option("--date", "-d", default=None,
               help="YYYY-MM-DD; default: today")
-def cmd_digest_run(date: str | None):
-    """Full daily digest pipeline (fetch → score → read → digest → push → deploy)."""
+@click.option("--force", is_flag=True,
+              help="Regenerate even if this date's digest already exists.")
+def cmd_digest_run(date: str | None, force: bool):
+    """Full daily digest pipeline (fetch → score → read → digest → push → deploy).
+
+    Idempotent: skips if the date's digest already exists (use --force to
+    regenerate), so OS cron and the in-session scheduler never double-run a day.
+    """
     from archivist.services.digest_runner import run_daily
     try:
-        run_daily(date)
+        run_daily(date, force=force)
     except Exception as e:
         click.echo(f"daily digest failed: {e}", err=True)
         raise SystemExit(1)

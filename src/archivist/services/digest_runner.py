@@ -114,6 +114,28 @@ def _strip_v(arxiv_id: str) -> str:
     return arxiv_id
 
 
+def _paper_deeply_read(arxiv_id: str) -> bool:
+    """True if a paper with this (version-stripped) arxiv_id has an archived
+    reading.md under papers/.
+
+    Used to verify a ``/read-paper`` actually landed a report rather than
+    trusting claude -p's exit code — the skill can exit clean without archiving
+    (e.g. a PDF download / read failure mid-run), which would otherwise be
+    miscounted as a successful deep read.
+    """
+    clean = _strip_v(arxiv_id)
+    if not PAPERS_DIR.exists():
+        return False
+    for meta_file in PAPERS_DIR.rglob("meta.json"):
+        try:
+            data = json.loads(meta_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if _strip_v(str(data.get("arxiv_id", ""))) == clean:
+            return (meta_file.parent / "reading.md").exists()
+    return False
+
+
 # ── Step 1: fetch ─────────────────────────────────────────────────
 
 
@@ -238,14 +260,26 @@ def _deep_read_top_k(candidates: list, score_results: list[dict]) -> list[str]:
         arxiv_id = _strip_v(c.paper.arxiv_id)
         title = c.paper.title.replace('"', '\\"')
         prompt = f'/read-paper {arxiv_id} --title "{title}"'
-        try:
-            log.info(f"  → /read-paper {arxiv_id}")
-            run_claude(prompt, timeout=3600)
+        # `/read-paper` can exit clean without archiving (PDF download / read
+        # failure mid-skill), so trust the artifact, not the exit code: verify a
+        # reading.md actually landed, and retry once on a silent miss.
+        landed = False
+        for attempt in range(2):
+            tag = "" if attempt == 0 else f" (retry {attempt})"
+            try:
+                log.info(f"  → /read-paper {arxiv_id}{tag}")
+                run_claude(prompt, timeout=3600)
+            except Exception as e:
+                log.error(f"  /read-paper {arxiv_id} errored: {e}")
+            if _paper_deeply_read(arxiv_id):
+                landed = True
+                break
+            log.error(f"  /read-paper {arxiv_id} exited but no reading.md archived")
+        if landed:
             succeeded.append(arxiv_id)
-        except Exception as e:
-            log.error(f"  /read-paper {arxiv_id} FAILED: {e}")
-            # Continue with the next paper instead of aborting the whole digest
-    log.info(f"  deep read summary: {len(succeeded)}/{len(selected)} succeeded")
+        else:
+            log.error(f"  /read-paper {arxiv_id} FAILED — not archived after retry; continuing")
+    log.info(f"  deep read summary: {len(succeeded)}/{len(selected)} archived")
     return succeeded
 
 

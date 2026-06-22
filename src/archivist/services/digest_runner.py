@@ -224,9 +224,42 @@ def _score_candidates(candidates: list) -> list[dict]:
 # ── Step 3: deep read top-k via claude -p /read-paper ─────────────
 
 
+def _read_and_verify(arxiv_id: str, title: str) -> bool:
+    """Run ``claude -p /read-paper`` for one paper, verify reading.md actually
+    landed, retry once on a silent miss. Returns True iff archived.
+
+    Self-contained and thread-safe: each call spawns its own ``claude -p``
+    subprocess, only touches its own paper's directory, and never raises — so
+    it is safe to fan several of these out concurrently for one day's papers.
+    """
+    safe_title = title.replace('"', '\\"')
+    prompt = f'/read-paper {arxiv_id} --title "{safe_title}"'
+    # `/read-paper` can exit clean without archiving (PDF download / read
+    # failure mid-skill), so trust the artifact, not the exit code.
+    for attempt in range(2):
+        tag = "" if attempt == 0 else f" (retry {attempt})"
+        try:
+            log.info(f"  → /read-paper {arxiv_id}{tag}")
+            run_claude(prompt, timeout=3600)
+        except Exception as e:
+            log.error(f"  /read-paper {arxiv_id} errored: {e}")
+        try:
+            if _paper_deeply_read(arxiv_id):
+                return True
+        except Exception as e:
+            log.error(f"  /read-paper {arxiv_id} archival check errored: {e}")
+        log.error(f"  /read-paper {arxiv_id} exited but no reading.md archived")
+    return False
+
+
 @_step("Step 3 — deep read top-k papers via claude -p /read-paper")
 def _deep_read_top_k(candidates: list, score_results: list[dict]) -> list[str]:
-    """Pick papers with score >= threshold, top_k_deep_read, run /read-paper serial."""
+    """Pick papers with score >= threshold, top_k_deep_read; deep-read them.
+
+    Within a single day the per-paper /read-paper calls run concurrently
+    (config ``arxiv.deep_read_concurrency``); the surrounding pipeline and the
+    day-to-day order stay serial.
+    """
     from archivist.services.arxiv_scorer import deep_read_allowed
 
     config = load_config().get("arxiv", {})
@@ -264,36 +297,36 @@ def _deep_read_top_k(candidates: list, score_results: list[dict]) -> list[str]:
         log.info(f"  no papers ≥ score {threshold} → skipping deep read")
         return []
 
-    log.info(f"  deep reading {len(selected)} paper(s) (threshold={threshold}, top_k={top_k}):")
+    concurrency = max(1, int(config.get("deep_read_concurrency", 4)))
+    workers = min(concurrency, len(selected))
+    log.info(
+        f"  deep reading {len(selected)} paper(s) "
+        f"(threshold={threshold}, top_k={top_k}, concurrency={workers}):"
+    )
     for s, c, _ in selected:
         log.info(f"    score={s:.0f} {c.paper.arxiv_id} | {c.paper.title[:70]}")
 
-    succeeded = []
-    failed = []
-    for score, c, _ in selected:
-        arxiv_id = _strip_v(c.paper.arxiv_id)
-        title = c.paper.title.replace('"', '\\"')
-        prompt = f'/read-paper {arxiv_id} --title "{title}"'
-        # `/read-paper` can exit clean without archiving (PDF download / read
-        # failure mid-skill), so trust the artifact, not the exit code: verify a
-        # reading.md actually landed, and retry once on a silent miss.
-        landed = False
-        for attempt in range(2):
-            tag = "" if attempt == 0 else f" (retry {attempt})"
-            try:
-                log.info(f"  → /read-paper {arxiv_id}{tag}")
-                run_claude(prompt, timeout=3600)
-            except Exception as e:
-                log.error(f"  /read-paper {arxiv_id} errored: {e}")
-            if _paper_deeply_read(arxiv_id):
-                landed = True
-                break
-            log.error(f"  /read-paper {arxiv_id} exited but no reading.md archived")
-        if landed:
-            succeeded.append(arxiv_id)
-        else:
-            failed.append(arxiv_id)
-            log.error(f"  /read-paper {arxiv_id} FAILED — not archived after retry; continuing")
+    jobs = [(_strip_v(c.paper.arxiv_id), c.paper.title) for _, c, _ in selected]
+    if workers <= 1:
+        landed_map = {aid: _read_and_verify(aid, title) for aid, title in jobs}
+    else:
+        # Fan out this day's reads concurrently; days themselves stay serial.
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        landed_map = {}
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(_read_and_verify, aid, title): aid for aid, title in jobs}
+            for fut in as_completed(futs):
+                aid = futs[fut]
+                try:
+                    landed_map[aid] = fut.result()
+                except Exception as e:
+                    log.error(f"  /read-paper {aid} worker crashed: {e}")
+                    landed_map[aid] = False
+
+    succeeded = [aid for aid, _ in jobs if landed_map.get(aid)]
+    failed = [aid for aid, _ in jobs if not landed_map.get(aid)]
+    for aid in failed:
+        log.error(f"  /read-paper {aid} FAILED — not archived after retry; continuing")
     if failed:
         log.warning(f"  ⚠️ deep-read failures {len(failed)}/{len(selected)}: {', '.join(failed)}")
     log.info(f"  deep read summary: {len(succeeded)}/{len(selected)} archived")

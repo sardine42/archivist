@@ -43,6 +43,9 @@ arxiv:
     - "cs.AI"    # Artificial Intelligence
   max_results_per_category: 100
   top_k_deep_read: 6
+  # 同一天内并行精读的论文数(每篇是独立 claude -p /read-paper 子调用)。
+  # 跨天仍严格串行;此值只控制单日内的精读并发。1 = 退回串行。
+  deep_read_concurrency: 4
   deep_read_threshold: 7  # Min score to enter deep reading (4-6 → brief archive only)
   # 推荐算法论文(generative-rec / discriminative-rec)仅在有工业界参与时才精读,
   # 纯学术论文只写 brief、不精读。工业界判定 = 评分时打的 `industrial` tag(LLM 据
@@ -278,6 +281,20 @@ companies:
     keywords: [Ant Group, MyBank, 蚂蚁]
   - name: Nokia
     keywords: [Nokia]
+  - name: Taboola
+    keywords: [Taboola]
+  - name: LUCID
+    keywords: [LUCID, thelucidproject, lucidtherapeutics]
+  - name: Coupang
+    keywords: [Coupang, coupang]
+  - name: Tubi
+    keywords: [Tubi, tubi.tv, tubitv]
+  - name: Kumo AI
+    keywords: [Kumo AI, Kumo, kumo.ai]
+  - name: Yandex
+    keywords: [Yandex]
+  - name: OPPO
+    keywords: [OPPO, Xiaobu, 小布]
 
 # Flat tag whitelist. Each tag must:
 #   1) Have a clear semantic boundary (no synonyms with other tags)
@@ -289,6 +306,7 @@ tags:
   - transformer            # Transformer / 注意力骨干
   - moe                    # Mixture-of-Experts 路由
   - diffusion              # 扩散模型
+  - normalizing-flow       # 标准化流 / 流式生成建模 (NF / planar / RealNVP / flow-matching 谱系)
   - pretrained-lm          # 用预训练 LLM 作组件 (≠ category=llm 即论文主题就是 LLM)
   - rl                     # 强化学习训练
   - contrastive-ssl        # 对比学习 / 自监督
@@ -298,6 +316,7 @@ tags:
   - recursive-depth        # 权重共享深度方向递归 (Universal Transformer / ALBERT / LoopCTR 谱系)
   - semantic-id            # 离散 semantic token 化物品
   - feature-interaction    # 显式特征交叉 (DCN / DeepFM 家族)
+  - feature-selection      # 特征选择 / 特征剪枝 (门控 / 置换重要性 / 维度筛选)
   - quantization           # 量化模型 / 特征
   - cold-start             # 冷启动场景
   - search-ranking         # 搜索排序专题
@@ -305,4 +324,8 @@ tags:
   - industrial             # 来自有线上系统的公司
   - academic               # 仅学术 / 无部署
   - sparse-attention       # 稀疏注意力 (top-k / 窗口 / 路由)
+  - linear-attention       # 线性 / 核化注意力 (kernel feature map / SSM / GDN / 亚二次)
   - test-time-training     # 推理时训练 / 自适应
+  - test-time-scaling      # 测试时计算扩展 (免训练,按难度分配推理算力)
+  - training-stability     # 训练稳定性 (loss spike / 低精度 / 激活函数 / 优化器)
+  - cross-domain           # 跨域推荐 / 跨域知识或数据迁移 (CDR / 合成数据增强)

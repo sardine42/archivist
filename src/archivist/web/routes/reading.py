@@ -22,18 +22,24 @@ def _protect_latex(text: str) -> tuple[str, list[str]]:
     Protects both display math ($$...$$) and inline math ($...$) from
     being mangled by the Markdown parser (which treats _ as emphasis).
 
-    Also rewrites bare ``<`` / ``>`` to ``\\lt`` / ``\\gt`` inside the LaTeX
-    content. The browser otherwise tries to parse ``y_{<j}`` as the start
-    of an HTML tag, breaking the DOM before KaTeX can run on the textContent.
-    KaTeX accepts ``\\lt`` and ``\\gt`` as proper math operators.
+    Also rewrites bare ``<`` / ``>`` to the HTML entities ``&lt;`` / ``&gt;``
+    inside the LaTeX content. The browser otherwise tries to parse ``y_{<j}``
+    as the start of an HTML tag, breaking the DOM before KaTeX can run on the
+    textContent. The entities survive the HTML parse and decode back to literal
+    ``<`` / ``>`` in textContent, which KaTeX renders as a relation in math mode
+    (identical to ``\\lt``) AND as a literal character inside ``\\texttt{}`` /
+    ``\\text{}`` text mode. Using ``\\lt`` / ``\\gt`` instead would break the
+    text-mode case (those commands are undefined there — e.g. semantic-id token
+    strings like ``\\texttt{<|domain_begin|><a_5028>}`` print a literal ``\\lt``).
     """
     placeholders = []
 
     def _escape_lt_gt(body: str) -> str:
-        # Replace bare `<` / `>` (not preceded by backslash) so they survive
-        # the HTML parse step and still render as math operators in KaTeX.
-        body = re.sub(r"(?<!\\)<", r"\\lt ", body)
-        body = re.sub(r"(?<!\\)>", r"\\gt ", body)
+        # Replace bare `<` / `>` (not preceded by backslash) with HTML entities
+        # so they survive the HTML parse and render correctly in BOTH math and
+        # text mode once KaTeX reads the decoded textContent.
+        body = re.sub(r"(?<!\\)<", "&lt;", body)
+        body = re.sub(r"(?<!\\)>", "&gt;", body)
         return body
 
     def store(match):

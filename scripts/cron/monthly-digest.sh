@@ -15,6 +15,7 @@ ARCHIVIST="$PROJECT_ROOT/.venv/bin/archivist"
 mkdir -p "$LOG_DIR"
 cd "$PROJECT_ROOT"
 export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
+export PYTHONUNBUFFERED=1   # 实时刷日志:429/重试等 print 立即落盘,不被块缓冲伪装成卡死
 
 # Cover the previous calendar month
 MONTH_ARG="$(date -d "last month" +%Y-%m)"

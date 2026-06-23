@@ -1,6 +1,7 @@
 """Arxiv API client for fetching recent papers."""
 
 import http.client
+import random
 import time
 import urllib.request
 import urllib.parse
@@ -14,7 +15,11 @@ ATOM_NS = "{http://www.w3.org/2005/Atom}"
 ARXIV_NS = "{http://arxiv.org/schemas/atom}"
 
 MAX_RETRIES = 4
-RATELIMIT_BACKOFF = 600           # 10min fixed — outlast ArXiv rate-limit (429) windows
+# Escalating 429 backoff (seconds), indexed by attempt + jitter. A short first
+# wait recovers from brief rate-limit windows in ~1min instead of stalling 10min;
+# later waits grow to outlast sustained blocks. Worst case ≈ 18min over 4 tries
+# (was a flat 600s × 4 = 40min, which disguised rate-limiting as a frozen hang).
+RATELIMIT_BACKOFF = (60, 150, 300, 600)
 NETWORK_BACKOFF = [5, 15, 30, 60]  # transient network / truncated-read errors — retry quickly
 
 # An empty ProxyHandler bypasses environment and system proxies for metadata
@@ -35,14 +40,16 @@ def _urlopen_with_retry(req, timeout=60):
             return _NO_PROXY_OPENER.open(req, timeout=timeout).read()
         except urllib.error.HTTPError as e:
             if e.code in (429, 500, 503) and attempt < MAX_RETRIES:
-                print(f"  ArXiv API {e.code}, retry {attempt+1}/{MAX_RETRIES} in {RATELIMIT_BACKOFF}s...")
-                time.sleep(RATELIMIT_BACKOFF)
+                base = RATELIMIT_BACKOFF[min(attempt, len(RATELIMIT_BACKOFF) - 1)]
+                wait = base + random.uniform(0, base * 0.2)  # jitter: avoid synchronized retries
+                print(f"  ArXiv API {e.code}, retry {attempt+1}/{MAX_RETRIES} in {wait:.0f}s...", flush=True)
+                time.sleep(wait)
             else:
                 raise
         except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as e:
             if attempt < MAX_RETRIES:
                 wait = NETWORK_BACKOFF[min(attempt, len(NETWORK_BACKOFF) - 1)]
-                print(f"  ArXiv network error ({type(e).__name__}: {e}), retry {attempt+1}/{MAX_RETRIES} in {wait}s...")
+                print(f"  ArXiv network error ({type(e).__name__}: {e}), retry {attempt+1}/{MAX_RETRIES} in {wait}s...", flush=True)
                 time.sleep(wait)
             else:
                 raise

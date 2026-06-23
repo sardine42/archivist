@@ -295,6 +295,10 @@ companies:
     keywords: [Yandex]
   - name: OPPO
     keywords: [OPPO, Xiaobu, 小布]
+  - name: NetEase
+    keywords: [NetEase, NetEase Cloud Music, 网易, 网易云音乐]
+  - name: Shopee
+    keywords: [Shopee, Sea Limited]
 
 # Flat tag whitelist. Each tag must:
 #   1) Have a clear semantic boundary (no synonyms with other tags)
@@ -317,6 +321,7 @@ tags:
   - semantic-id            # 离散 semantic token 化物品
   - feature-interaction    # 显式特征交叉 (DCN / DeepFM 家族)
   - feature-selection      # 特征选择 / 特征剪枝 (门控 / 置换重要性 / 维度筛选)
+  - multi-task             # 多任务学习 (CTR/CVR 联合、跷跷板缓解、任务解耦 / 知识迁移)
   - quantization           # 量化模型 / 特征
   - cold-start             # 冷启动场景
   - search-ranking         # 搜索排序专题
@@ -329,3 +334,5 @@ tags:
   - test-time-scaling      # 测试时计算扩展 (免训练,按难度分配推理算力)
   - training-stability     # 训练稳定性 (loss spike / 低精度 / 激活函数 / 优化器)
   - cross-domain           # 跨域推荐 / 跨域知识或数据迁移 (CDR / 合成数据增强)
+  - negative-feedback      # 隐式/显式负反馈建模 (skip / dislike / 混合极性行为序列)
+  - graph                  # 图建模 (item-item 共参与图 / GNN / 超图 / 图聚类 / 图补全)

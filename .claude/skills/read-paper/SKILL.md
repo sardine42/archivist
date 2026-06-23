@@ -34,9 +34,9 @@ python3 scripts/download-paper.py --local <pdf_path> --title "<标题>"
 ```bash
 uv run python3 scripts/extract-figures.py <paper_dir>/document.pdf <paper_dir>/figures
 ```
-脚本输出 `figures/figures.json`（包含每张图的文件名、页码、caption）和 `figures/fig_01.png` 等图片文件。
+脚本输出 `figures/figures.json`（每张图含 `filename` / `page` / `kind` / `caption` / `bbox`）和 `figures/fig_01.png` 等图片文件。`caption` 为完整多行图注，`kind` 为 `figure` 或 `table`（矢量表格会被一并提取并标为 `table`）。
 
-精读时在正文对应位置插入图片引用：`![Figure 1: caption](figures/fig_01.png)`。根据 `figures.json` 中的 caption 和页码，将图片插入到精读文档中讨论该图的段落附近。
+精读时在正文对应位置插入图片引用：`![Figure 1: caption](figures/fig_01.png)`。根据 `figures.json` 中的 `caption` 和 `page` 将图片插入到讨论该图的段落附近；`kind=table` 的项是论文表格截图，按需引用。少数图可能 `caption` 为空（如首页无图注的 teaser），据页码与内容自行判断。
 
 ### 2. 精读论文
 

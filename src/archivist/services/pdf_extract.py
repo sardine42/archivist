@@ -102,28 +102,36 @@ def _caption_anchors(page) -> list[dict]:
 
 
 def _match_caption(fig: pymupdf.Rect, anchors: list[dict], max_gap: float = 130) -> dict:
-    """Pick the caption block nearest a figure box, preferring below then above.
+    """Pick the caption block nearest a figure box, on the side its kind implies.
 
     Requires horizontal overlap so a caption sitting in the *other* column of a
     two-column layout is never stolen. Returns {} when nothing matches; the same
     anchor may legitimately serve two side-by-side panels of one logical figure.
     A wrong caption is worse than none (it misplaces the figure), so ``max_gap``
     stays conservative.
+
+    Typesetting convention puts figure captions *below* the artwork and table
+    captions *above* the table. Preferring "below" unconditionally therefore
+    mislabelled every table screenshot that had anything captioned beneath it —
+    and what sits beneath a table is usually the *next* numbered item, so the
+    label could be assigned to the next numbered item. Scoring each anchor on the side its own kind implies fixes that
+    without touching figure behaviour.
     """
     best, best_key = {}, None
     for a in anchors:
         r = a["rect"]
         if min(fig.x1, r.x1) - max(fig.x0, r.x0) <= 0:  # no horizontal overlap
             continue
-        if r.y0 >= fig.y1 - 8:            # caption below the figure
-            gap, where = r.y0 - fig.y1, 0
-        elif r.y1 <= fig.y0 + 8:          # caption above the figure
-            gap, where = fig.y0 - r.y1, 1
+        if r.y0 >= fig.y1 - 8:            # anchor sits below the image
+            gap, natural = r.y0 - fig.y1, a["kind"] == "figure"
+        elif r.y1 <= fig.y0 + 8:          # anchor sits above the image
+            gap, natural = fig.y0 - r.y1, a["kind"] == "table"
         else:
             continue
         if gap > max_gap:
             continue
-        key = (where, gap)                # below (0) beats above (1), then nearest
+        # conventional side (0) beats the other side (1), then nearest wins
+        key = (0 if natural else 1, gap)
         if best_key is None or key < best_key:
             best_key, best = key, a
     return best

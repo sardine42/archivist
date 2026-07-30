@@ -138,6 +138,14 @@ def fetch_category_all(
             break  # No more results
         start += max_per_page
         time.sleep(3)  # Respect API rate limits
+    else:
+        # Ran the range dry only if we broke out above; falling through the
+        # while condition means max_total cut us off. Never let that be silent.
+        print(
+            f"  ⚠ {category} {date_from}..{date_to}: hit max_total={max_total}, "
+            f"results TRUNCATED — raise max_total or narrow the range",
+            flush=True,
+        )
     return all_papers
 
 
@@ -148,15 +156,27 @@ def fetch_papers(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> list[RawPaper]:
-    """Fetch papers from multiple categories, deduplicated by arxiv_id."""
+    """Fetch papers from multiple categories, deduplicated by arxiv_id.
+
+    Every date-filtered path paginates until the day/range is exhausted, so
+    ``max_results`` is a *page size*, not a ceiling on what a day can yield.
+    A single-page ceiling with ``sortOrder=descending`` would drop the day's
+    earliest submissions before keyword filtering whenever the category count
+    exceeded the page size. Pagination preserves the complete candidate set.
+    """
     seen = set()
     papers = []
 
     for cat in categories:
         if date_from and date_to:
             cat_papers = fetch_category_all(cat, date_from=date_from, date_to=date_to, max_per_page=max_results)
+        elif date:
+            # Single day == a one-day range; fetch_category builds an identical
+            # query for both, so this only adds the missing pagination.
+            cat_papers = fetch_category_all(cat, date_from=date, date_to=date, max_per_page=max_results)
         else:
-            cat_papers = fetch_category(cat, max_results=max_results, date=date)
+            # No date filter: "the most recent N" — here the cap is the intent.
+            cat_papers = fetch_category(cat, max_results=max_results)
         for p in cat_papers:
             if p.arxiv_id not in seen:
                 seen.add(p.arxiv_id)

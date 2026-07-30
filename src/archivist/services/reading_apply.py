@@ -21,7 +21,14 @@ _META_FIELDS = [
     "tags", "proposed_tags", "model_name",
     "reading_score", "reading_score_reason",
     "published_date", "generated_by",
+    "url",
 ]
+
+
+def _abs_url(arxiv_id: str) -> str:
+    """Canonical ArXiv abs URL, version suffix stripped."""
+    clean = arxiv_id.split("v")[0] if "v" in arxiv_id and arxiv_id.split("v")[-1].isdigit() else arxiv_id
+    return f"https://arxiv.org/abs/{clean}"
 
 
 def _normalize_category(value) -> list[str]:
@@ -43,10 +50,27 @@ def apply_reading(data: dict) -> dict:
 
     summary: dict = {"arxiv_id": arxiv_id, "slug": slug}
 
-    meta_updates = {
-        k: v for k, v in data.get("meta", {}).items()
-        if k in _META_FIELDS
-    }
+    raw_meta = data.get("meta", {})
+    meta_updates = {k: v for k, v in raw_meta.items() if k in _META_FIELDS}
+
+    # Anything the caller sent that we don't persist is a typo or a schema drift
+    # — report it instead of silently dropping fields when the schema drifts.
+    dropped = sorted(set(raw_meta) - set(_META_FIELDS))
+    if dropped:
+        print(f"  ⚠ apply-reading: ignored unknown meta field(s) {dropped}", flush=True)
+
+    # url is fully derivable from arxiv_id, so never depend on it being sent.
+    # Only fill a blank: a paper imported from a non-arxiv source may carry a
+    # deliberately different link, and update_paper_at overwrites outright.
+    if not meta_updates.get("url"):
+        try:
+            stored_url = json.loads((paper_dir / "meta.json").read_text(encoding="utf-8")).get("url", "")
+        except (OSError, json.JSONDecodeError):
+            stored_url = ""
+        if not stored_url:
+            meta_updates["url"] = _abs_url(arxiv_id)
+        else:
+            meta_updates.pop("url", None)
     if "category" in meta_updates:
         meta_updates["category"] = _normalize_category(meta_updates["category"])
     if "tags" in meta_updates:

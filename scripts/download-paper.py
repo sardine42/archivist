@@ -61,6 +61,8 @@ def main():
             sys.exit(1)
         paper = results[0]
         print(f"找到论文: {paper.title} [{paper.arxiv_id}]", file=sys.stderr)
+        if paper.published and paper.published[:4].isdigit():
+            year = int(paper.published[:4])  # 用论文实际发表年份,而非当前年
         title = args.title or paper.title
         arxiv_id = paper.arxiv_id
         slug = slugify(title)
@@ -90,6 +92,16 @@ def main():
     elif args.arxiv_id:
         from archivist.services.arxiv_fetch import download_pdf, fetch_by_id
         title = args.title or args.arxiv_id
+        # 先取元数据,用论文实际发表年份定目录/年份(而非当前年——否则历史论文归错年)
+        published_date = ""
+        try:
+            raw = fetch_by_id(args.arxiv_id)
+            if raw and raw.published:
+                published_date = raw.published[:10]
+                if published_date[:4].isdigit():
+                    year = int(published_date[:4])
+        except Exception as e:
+            print(f"warn: fetch_by_id({args.arxiv_id}) failed: {e}", file=sys.stderr)
         slug = slugify(title)
         paper_dir = PAPERS_DIR / str(year) / slug
         if paper_dir.exists():
@@ -99,13 +111,6 @@ def main():
         pdf_path = paper_dir / "document.pdf"
         print(f"Downloading {args.arxiv_id}...", file=sys.stderr)
         download_pdf(f"https://arxiv.org/pdf/{args.arxiv_id}", str(pdf_path))
-        published_date = ""
-        try:
-            raw = fetch_by_id(args.arxiv_id)
-            if raw and raw.published:
-                published_date = raw.published[:10]
-        except Exception as e:
-            print(f"warn: fetch_by_id({args.arxiv_id}) failed: {e}", file=sys.stderr)
         meta = PaperMeta(id=generate_id(), title=title, slug=slug, year=year,
                          arxiv_id=args.arxiv_id, source_filename=f"{args.arxiv_id}.pdf",
                          published_date=published_date)

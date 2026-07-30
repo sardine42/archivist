@@ -299,6 +299,12 @@ companies:
     keywords: [NetEase, NetEase Cloud Music, 网易, 网易云音乐]
   - name: Shopee
     keywords: [Shopee, Sea Limited]
+  - name: QuintoAndar
+    keywords: [QuintoAndar, Concierge]
+  - name: Instacart
+    keywords: [Instacart]
+  - name: Moonshot AI
+    keywords: [Moonshot AI, Moonshot, 月之暗面, Kimi]
 
 # Flat tag whitelist. Each tag must:
 #   1) Have a clear semantic boundary (no synonyms with other tags)
@@ -336,3 +342,4 @@ tags:
   - cross-domain           # 跨域推荐 / 跨域知识或数据迁移 (CDR / 合成数据增强)
   - negative-feedback      # 隐式/显式负反馈建模 (skip / dislike / 混合极性行为序列)
   - graph                  # 图建模 (item-item 共参与图 / GNN / 超图 / 图聚类 / 图补全)
+  - agent                  # LLM 智能体 / 多智能体框架 (agentic 推理-行动、R&D 自动化、架构演进 harness)

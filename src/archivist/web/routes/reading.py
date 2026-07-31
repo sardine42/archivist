@@ -97,11 +97,17 @@ def _render_markdown(text: str) -> str:
 
 
 def _resolve_wiki_links(html: str, papers_by_arxiv: dict, papers_by_slug: dict) -> str:
-    """Replace [[arxiv_id]] or [[slug]] with links to detail pages."""
+    """Replace [[arxiv_id]] or [[slug]] with links to detail pages.
+
+    Both references and lookup keys are version-normalised, so citations
+    resolve regardless of which paper version is stored in the archive.
+    """
     def replace_link(match):
         ref = match.group(1)
-        if ref in papers_by_arxiv:
-            p = papers_by_arxiv[ref]
+        # Normalise only for the arxiv lookup — a slug may legitimately end in
+        # "v2" (e.g. "dcn-v2"), which _clean_arxiv_id would truncate.
+        if _clean_arxiv_id(ref) in papers_by_arxiv:
+            p = papers_by_arxiv[_clean_arxiv_id(ref)]
             return f'<a href="/reading/{p.year}/{p.slug}/" class="wiki-link">{p.model_name or p.title}</a>'
         if ref in papers_by_slug:
             p = papers_by_slug[ref]
@@ -133,12 +139,14 @@ def _load_papers_enriched():
 
 # Build lookup dicts for wiki links
 def _build_paper_lookups(papers):
+    """Index papers for [[…]] resolution. Arxiv keys are version-normalised so
+    a citation resolves regardless of which version got archived."""
     by_arxiv = {}
     by_slug = {}
     for item in papers:
         p = item["meta"]
         if p.arxiv_id:
-            by_arxiv[p.arxiv_id] = p
+            by_arxiv[_clean_arxiv_id(p.arxiv_id)] = p
         by_slug[p.slug] = p
     return by_arxiv, by_slug
 

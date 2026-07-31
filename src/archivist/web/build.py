@@ -60,14 +60,10 @@ def build_site(output_dir: Path) -> None:
     from archivist.services.tag_registry import load_whitelist
     tag_list = sorted(load_whitelist())
 
-    # Build paper lookups for wiki links
-    by_arxiv = {}
-    by_slug = {}
-    for item in enriched:
-        p = item["meta"]
-        if p.arxiv_id:
-            by_arxiv[p.arxiv_id] = p
-        by_slug[p.slug] = p
+    # Build paper lookups for wiki links — same indexing as the dev server, so
+    # a [[…]] link can't resolve in one and dangle in the other.
+    from archivist.web.routes.reading import _build_paper_lookups
+    by_arxiv, by_slug = _build_paper_lookups(enriched)
 
     # Load digests data
     from archivist.web.data import prepare_digests_data, build_paper_to_digests_index, render_digest_html

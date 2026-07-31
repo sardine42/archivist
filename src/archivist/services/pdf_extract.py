@@ -137,6 +137,75 @@ def _match_caption(fig: pymupdf.Rect, anchors: list[dict], max_gap: float = 130)
     return best
 
 
+def _split_box_at_captions(box: pymupdf.Rect, anchors: list[dict],
+                           page_rect: pymupdf.Rect | None = None,
+                           min_h: float = 40) -> list[pymupdf.Rect]:
+    """Cut a box wherever a caption sits inside it.
+
+    ``cluster_drawings()`` sometimes returns one cluster for a whole column,
+    chaining a table's rules into the figure below it. Captions never sit
+    *inside* one figure's artwork, so any caption strictly within the box marks
+    a boundary between two items. Panel labels like "(a)" don't match _CAP_RE,
+    so multi-panel figures are unaffected.
+    """
+    # A page-sized cluster is cluster_drawings() failing, not a real region —
+    # the caller already discards those. Splitting it just turns one discarded
+    # blob into several half-page crops of body text, each stealing a caption.
+    if page_rect is not None and (box.width > page_rect.width * 0.9
+                                  and box.height > page_rect.height * 0.85):
+        return [box]
+    cuts = []
+    for a in anchors:
+        r = a["rect"]
+        if r.y0 <= box.y0 or r.y1 >= box.y1:
+            continue  # not strictly inside
+        if min(box.x1, r.x1) - max(box.x0, r.x0) <= 0:
+            continue  # other column
+        cuts.append((r.y0, r.y1))
+    if not cuts:
+        return [box]
+    cuts.sort()
+    parts, top = [], box.y0
+    for lo, hi in cuts:
+        if lo - top >= min_h:
+            parts.append(pymupdf.Rect(box.x0, top, box.x1, lo))
+        top = max(top, hi)
+    if box.y1 - top >= min_h:
+        parts.append(pymupdf.Rect(box.x0, top, box.x1, box.y1))
+    return parts or [box]
+
+
+def _merge_by_caption_owner(boxes: list[pymupdf.Rect], anchors: list[dict],
+                            gap: float = 20,
+                            page_rect: pymupdf.Rect | None = None) -> list[pymupdf.Rect]:
+    """Merge boxes, but only ones that claim the same caption.
+
+    Proximity alone over-merges: a table body and the figure below it are
+    typically closer to each other than 20pt, yet nothing sits between them —
+    a table's caption is above it and a figure's is below, so consecutive items
+    leave no separator in the gap. Distance-only merging can therefore combine several numbered items.
+
+    Letting every box claim its own caption first, and merging only within a
+    claim, keeps multi-panel figures together (all panels match the one caption
+    beneath them) while never fusing two numbered items. Boxes that match no
+    caption fall back to plain proximity merging among themselves.
+    """
+    split: list[pymupdf.Rect] = []
+    for box in boxes:
+        split.extend(_split_box_at_captions(box, anchors, page_rect))
+    groups: dict[int, list[pymupdf.Rect]] = {}
+    for box in split:
+        match = _match_caption(box, anchors)
+        # anchors hold no natural id; position in the list is a stable key
+        key = next((i for i, a in enumerate(anchors) if a is match), -1)
+        groups.setdefault(key, []).append(box)
+    out = []
+    for key, group in groups.items():
+        out.extend(_merge_nearby_boxes(group, gap=gap))
+    # Grouping scrambles page order; fig_NN must still follow reading order.
+    return sorted(out, key=lambda r: (r.y0, r.x0))
+
+
 def extract_all_figures(pdf_path: Path, output_dir: Path,
                         dpi: int = 200, min_size: int = 200) -> list[dict]:
     """Extract all figures (vector + bitmap) from a PDF.
@@ -188,8 +257,8 @@ def extract_all_figures(pdf_path: Path, output_dir: Path,
         if not all_boxes:
             continue
 
-        # 3. Merge nearby boxes into figure regions
-        merged = _merge_nearby_boxes(all_boxes)
+        # 3. Merge nearby boxes into figure regions, one region per caption
+        merged = _merge_by_caption_owner(all_boxes, anchors, page_rect=page_rect)
 
         # 4. Extract each merged region
         for bbox in merged:

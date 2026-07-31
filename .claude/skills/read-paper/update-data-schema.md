@@ -16,7 +16,6 @@
     "reading_score_reason": "1-2句精读打分理由",
     "one_line_summary": "一句中文总结",
     "one_line_summary_en": "One English sentence",
-    "keywords": ["关键词1", "关键词2"],
     "tags": ["generative-retrieval", "semantic-id", "industrial"],
     "url": "https://arxiv.org/abs/1234.56789",
     "generated_by": "claude-opus-4-7"

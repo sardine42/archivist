@@ -206,6 +206,33 @@ def _merge_by_caption_owner(boxes: list[pymupdf.Rect], anchors: list[dict],
     return sorted(out, key=lambda r: (r.y0, r.x0))
 
 
+def _covers_page(r: pymupdf.Rect, page_rect: pymupdf.Rect) -> bool:
+    """Whether ``r`` spans essentially the whole page (border or background)."""
+    return r.width > page_rect.width * 0.95 and r.height > page_rect.height * 0.95
+
+
+def _hugs_figure_caption(r: pymupdf.Rect, anchors: list[dict],
+                         gap: float = 26) -> bool:
+    """Whether a ``Figure N:`` caption sits immediately below ``r``.
+
+    Rescues wide-flat artwork that the min-side guard would drop, including
+    multi-panel schematics with a short vertical span.
+
+    Restricted to *figure* captions on purpose. Table captions sit above their
+    table, and a table's rules cluster into separate thin bands, so allowing the
+    table side rescued header strips and single-row fragments rather than tables.
+    """
+    for a in anchors:
+        if a["kind"] != "figure":
+            continue
+        ar = a["rect"]
+        if min(r.x1, ar.x1) - max(r.x0, ar.x0) <= 0:  # no horizontal overlap
+            continue
+        if 0 <= ar.y0 - r.y1 <= gap:
+            return True
+    return False
+
+
 def extract_all_figures(pdf_path: Path, output_dir: Path,
                         dpi: int = 200, min_size: int = 200) -> list[dict]:
     """Extract all figures (vector + bitmap) from a PDF.
@@ -231,13 +258,26 @@ def extract_all_figures(pdf_path: Path, output_dir: Path,
 
         # 1. Vector graphics via cluster_drawings
         try:
-            for rect in page.cluster_drawings():
+            # Some templates paint a page-sized background rect on every page.
+            # It bridges every drawing into one page-wide cluster, which the
+            # full-page guard below then discards -- losing all figures. Drop
+            # such rects first; when there are none the call is unchanged.
+            drawings = page.get_drawings()
+            content = [d for d in drawings
+                       if not _covers_page(pymupdf.Rect(d["rect"]), page_rect)]
+            clusters = (page.cluster_drawings() if len(content) == len(drawings)
+                        else page.cluster_drawings(drawings=content))
+            for rect in clusters:
                 r = pymupdf.Rect(rect)
-                # Skip tiny drawings and full-page borders
+                if _covers_page(r, page_rect):  # full-page border
+                    continue
+                # Skip tiny drawings, unless a figure caption hugs the box --
+                # wide-flat panels are real figures the size guard would lose.
                 if r.width < min_size / 3 or r.height < min_size / 3:
-                    continue
-                if r.width > page_rect.width * 0.95 and r.height > page_rect.height * 0.95:
-                    continue
+                    if (max(r.width, r.height) < min_size / 3
+                            or min(r.width, r.height) < 40
+                            or not _hugs_figure_caption(r, anchors)):
+                        continue
                 all_boxes.append(r)
         except Exception:
             pass

@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 import markdown
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from archivist.config import PAPERS_DIR, DOCS_DIR
 from archivist.services.paper_store import list_papers, get_paper_dir
@@ -29,7 +29,15 @@ def build_site(output_dir: Path) -> None:
     output_dir.mkdir(parents=True)
 
     # Setup Jinja2 environment
-    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+    # autoescape must be on: Jinja defaults it to False, but Flask's dev-server
+    # env has it on, so the static build silently diverged. Paper metadata is
+    # prose that legitimately contains `<` (for example, "x<y"),
+    # which was emitted raw and opened a bogus tag that swallowed every card
+    # after it. Pre-rendered HTML (`content`, `toc`) already passes `| safe`.
+    env = Environment(
+        loader=FileSystemLoader(str(TEMPLATE_DIR)),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
     env.globals["url_for"] = _static_url_for
     env.globals["request"] = _FakeRequest()
     env.globals["mode"] = "production"

@@ -18,7 +18,8 @@
     "one_line_summary_en": "One English sentence",
     "tags": ["generative-retrieval", "semantic-id", "industrial"],
     "url": "https://arxiv.org/abs/1234.56789",
-    "generated_by": "claude-opus-4-7"
+    "generated_by": "gpt-5.6-sol",
+    "reasoning_effort": "high"
   },
   "benchmarks": [
     {
@@ -71,7 +72,8 @@
 - `reading_score`: **必填**，精读评分 (1-10)，参考 `archive/criteria/reading-criteria.md` 中的精读评分标准
 - `reading_score_reason`: **必填**，精读打分理由（1-2句话，说明为什么给这个分数，内部排查用）
 - `url`: ArXiv 链接
-- `generated_by`: **必填**，执行本次精读的 Claude 模型 ID（如 `"claude-opus-4-7"`、`"claude-sonnet-4-6"`）。从 system prompt 里读取自己的模型标识，不要手编。该字段用于详情页展示"由谁精读"。
+- `generated_by`: **必填**，执行本次精读的 Codex 模型 ID；优先使用 `$read-paper --generated-by`，否则从当前 session 的 `turn_context.model` 确认。无法确认时写 `"codex"`，不要猜测版本。
+- `reasoning_effort`: **必填**，执行本次精读的 reasoning effort；优先使用 `$read-paper --reasoning-effort`，否则从当前 session 的 `turn_context.collaboration_mode.settings.reasoning_effort` 确认。无法确认时写空字符串。详情页将模型和 effort 一起展示。
 
 ### benchmarks
 - **指标值统一使用小数制**：如 Recall@10=0.0648 而非 6.48，NDCG@10=0.0384 而非 3.84。系统会自动将 >1 的值除以 100

@@ -33,8 +33,6 @@ Thumbs.db
 # ─── Local state ──────────────────────────────────────────
 .paper-list.json
 .paper-reading-progress.json
-.claude/scheduled_tasks.lock
-.claude/scheduled_tasks.json
 
 # ─── User-specific config overrides ───────────────────────
 # Deploy host / site base_url / lark user id live here and

@@ -1,8 +1,8 @@
 """End-to-end script orchestrator for daily / weekly / monthly digests.
 
-This is the script-driven replacement for the agent-driven Skill flow.
+This is the headless counterpart to the main-session ``$run-digest`` Skill.
 The orchestrator runs deterministic steps directly and only delegates to
-``claude -p`` (via ``claude_runner``) for the three judgment-required
+``codex exec`` (via ``codex_runner``) for the three judgment-required
 points: paper scoring, paper deep-reading, and digest summarization.
 
 Public entry points:
@@ -39,7 +39,7 @@ from archivist.services.arxiv_scorer import (
     pre_filter,
 )
 from archivist.services.arxiv_fetch import fetch_papers
-from archivist.services.claude_runner import ClaudeRunnerError, run_claude_json, run_claude
+from archivist.services.codex_runner import CodexRunnerError, run_codex, run_codex_json
 from archivist.services.digest import (
     _coverage_range,
     prepare_daily,
@@ -118,8 +118,8 @@ def _paper_deeply_read(arxiv_id: str) -> bool:
     """True if a paper with this (version-stripped) arxiv_id has an archived
     reading.md under papers/.
 
-    Used to verify a ``/read-paper`` actually landed a report rather than
-    trusting claude -p's exit code — the skill can exit clean without archiving
+    Used to verify a ``$read-paper`` actually landed a report rather than
+    trusting ``codex exec``'s exit code — the skill can exit clean without archiving
     (e.g. a PDF download / read failure mid-run), which would otherwise be
     miscounted as a successful deep read.
     """
@@ -173,7 +173,7 @@ def _fetch_candidates(coverage_start: str, coverage_end: str) -> list[dict]:
     return candidate_objs
 
 
-# ── Step 2: score via claude -p ──────────────────────────────────
+# ── Step 2: score via codex exec ─────────────────────────────────
 
 
 def _build_score_prompt(candidate_dicts: list[dict]) -> str:
@@ -186,9 +186,9 @@ def _build_score_prompt(candidate_dicts: list[dict]) -> str:
     )
 
 
-@_step("Step 2 — score + summarize via claude -p")
+@_step("Step 2 — score + summarize via codex exec")
 def _score_candidates(candidates: list) -> list[dict]:
-    """Call claude -p once to score all candidates. Returns score result list."""
+    """Call Codex once to score all candidates. Returns score result list."""
     if not candidates:
         log.info("  no candidates → skipping scoring")
         return []
@@ -197,10 +197,10 @@ def _score_candidates(candidates: list) -> list[dict]:
     cand_dicts = candidates_to_json(candidates)
     prompt = _build_score_prompt(cand_dicts)
 
-    log.info(f"  invoking claude -p on {len(cand_dicts)} candidates…")
-    result = run_claude_json(prompt, retries=1)
+    log.info(f"  invoking codex exec on {len(cand_dicts)} candidates…")
+    result = run_codex_json(prompt, cwd=BASE_DIR, retries=1)
     if not isinstance(result, list):
-        raise ClaudeRunnerError(
+        raise CodexRunnerError(
             f"score result must be a JSON array, got {type(result).__name__}"
         )
 
@@ -221,42 +221,42 @@ def _score_candidates(candidates: list) -> list[dict]:
     return [by_id.get(c.paper.arxiv_id, {}) for c in candidates]
 
 
-# ── Step 3: deep read top-k via claude -p /read-paper ─────────────
+# ── Step 3: deep read top-k via codex exec + $read-paper ──────────
 
 
 def _read_and_verify(arxiv_id: str, title: str) -> bool:
-    """Run ``claude -p /read-paper`` for one paper, verify reading.md actually
+    """Run ``codex exec`` with ``$read-paper`` for one paper and verify reading.md
     landed, retry once on a silent miss. Returns True iff archived.
 
-    Self-contained and thread-safe: each call spawns its own ``claude -p``
+    Self-contained and thread-safe: each call spawns its own ``codex exec``
     subprocess, only touches its own paper's directory, and never raises — so
     it is safe to fan several of these out concurrently for one day's papers.
     """
     safe_title = title.replace('"', '\\"')
-    prompt = f'/read-paper {arxiv_id} --title "{safe_title}"'
-    # `/read-paper` can exit clean without archiving (PDF download / read
+    prompt = f'$read-paper {arxiv_id} --title "{safe_title}"'
+    # `$read-paper` can exit clean without archiving (PDF download / read
     # failure mid-skill), so trust the artifact, not the exit code.
     for attempt in range(2):
         tag = "" if attempt == 0 else f" (retry {attempt})"
         try:
-            log.info(f"  → /read-paper {arxiv_id}{tag}")
-            run_claude(prompt, timeout=3600)
+            log.info(f"  → $read-paper {arxiv_id}{tag}")
+            run_codex(prompt, cwd=BASE_DIR, timeout=3600)
         except Exception as e:
-            log.error(f"  /read-paper {arxiv_id} errored: {e}")
+            log.error(f"  $read-paper {arxiv_id} errored: {e}")
         try:
             if _paper_deeply_read(arxiv_id):
                 return True
         except Exception as e:
-            log.error(f"  /read-paper {arxiv_id} archival check errored: {e}")
-        log.error(f"  /read-paper {arxiv_id} exited but no reading.md archived")
+            log.error(f"  $read-paper {arxiv_id} archival check errored: {e}")
+        log.error(f"  $read-paper {arxiv_id} exited but no reading.md archived")
     return False
 
 
-@_step("Step 3 — deep read top-k papers via claude -p /read-paper")
+@_step("Step 3 — deep read top-k papers via codex exec + $read-paper")
 def _deep_read_top_k(candidates: list, score_results: list[dict]) -> list[str]:
     """Pick papers with score >= threshold, top_k_deep_read; deep-read them.
 
-    Within a single day the per-paper /read-paper calls run concurrently
+    Within a single day the per-paper ``$read-paper`` calls run concurrently
     (config ``arxiv.deep_read_concurrency``); the surrounding pipeline and the
     day-to-day order stay serial.
     """
@@ -320,25 +320,25 @@ def _deep_read_top_k(candidates: list, score_results: list[dict]) -> list[str]:
                 try:
                     landed_map[aid] = fut.result()
                 except Exception as e:
-                    log.error(f"  /read-paper {aid} worker crashed: {e}")
+                    log.error(f"  $read-paper {aid} worker crashed: {e}")
                     landed_map[aid] = False
 
     succeeded = [aid for aid, _ in jobs if landed_map.get(aid)]
     failed = [aid for aid, _ in jobs if not landed_map.get(aid)]
     for aid in failed:
-        log.error(f"  /read-paper {aid} FAILED — not archived after retry; continuing")
+        log.error(f"  $read-paper {aid} FAILED — not archived after retry; continuing")
     if failed:
         log.warning(f"  ⚠️ deep-read failures {len(failed)}/{len(selected)}: {', '.join(failed)}")
     log.info(f"  deep read summary: {len(succeeded)}/{len(selected)} archived")
     return succeeded
 
 
-# ── Step 4: theme generation via claude -p ───────────────────────
+# ── Step 4: theme generation via codex exec ──────────────────────
 
 
-@_step("Step 4 — generate digest theme via claude -p")
+@_step("Step 4 — generate digest theme via codex exec")
 def _generate_theme(period: str, period_id: str, prepare_data: dict) -> dict:
-    """Call claude -p to produce {theme, theme_tags, highlights, summary}."""
+    """Call Codex to produce {theme, theme_tags, highlights, summary}."""
     template = (PROMPTS_DIR / f"{period}_theme.md").read_text(encoding="utf-8")
     key = {"daily": "date", "weekly": "week", "monthly": "month"}[period]
     prompt = template.format(
@@ -346,10 +346,10 @@ def _generate_theme(period: str, period_id: str, prepare_data: dict) -> dict:
         prepare_json=json.dumps(prepare_data, ensure_ascii=False, indent=2),
     )
 
-    log.info(f"  invoking claude -p for {period} theme…")
-    result = run_claude_json(prompt, retries=1)
+    log.info(f"  invoking codex exec for {period} theme…")
+    result = run_codex_json(prompt, cwd=BASE_DIR, retries=1)
     if not isinstance(result, dict):
-        raise ClaudeRunnerError(
+        raise CodexRunnerError(
             f"theme result must be a JSON object, got {type(result).__name__}"
         )
     # Ensure required keys present (defaults for empty days)
@@ -370,10 +370,14 @@ def _push(period: str, period_id: str, paper_count: int) -> None:
         log.info("  empty digest — skipping push to avoid noise")
         return
     notifier = get_notifier()
+    try:
+        year = int(period_id[:4])
+    except (TypeError, ValueError):
+        year = date_type.today().year
     # A push failure (missing/broken backend, auth, network) must not fail the
     # whole digest or block the deploy that follows — log and continue.
     try:
-        msg_id = notifier.push_digest(period, period_id)
+        msg_id = notifier.push_digest(period, period_id, year=year)
     except NotifyError as e:
         log.error(f"  push failed — continuing to deploy: {e}")
         return
@@ -409,8 +413,8 @@ def run_daily(date_str: str | None = None, force: bool = False) -> None:
     log.info(f"╔══ daily digest run for {date} ══╗")
 
     # Idempotency guard: if this date's digest already exists, skip the whole
-    # (expensive) pipeline unless forced. Lets the OS-cron wrapper and the
-    # in-session scheduler coexist without double-running the same day.
+    # (expensive) pipeline unless forced. This is the second guard after the
+    # shared flock held by cron or the main-session orchestrator.
     existing = DIGESTS_DIR / date[:4] / "daily" / f"{date}.md"
     if existing.exists() and not force:
         log.info(f"  digest already exists ({existing.name}) — skipping (use --force to regenerate)")
@@ -443,11 +447,17 @@ def run_daily(date_str: str | None = None, force: bool = False) -> None:
     log.info(f"╚══ daily digest done for {date} ══╝")
 
 
-def run_weekly(week_str: str | None = None) -> None:
+def run_weekly(week_str: str | None = None, force: bool = False) -> None:
     if not week_str:
         iso = date_type.today().isocalendar()
         week_str = f"{iso[0]}-W{iso[1]:02d}"
     log.info(f"╔══ weekly digest run for {week_str} ══╗")
+
+    existing = DIGESTS_DIR / week_str[:4] / "weekly" / f"{week_str}.md"
+    if existing.exists() and not force:
+        log.info(f"  digest already exists ({existing.name}) — skipping (use --force to regenerate)")
+        log.info(f"╚══ weekly digest skipped (exists) for {week_str} ══╝")
+        return
 
     prepare_data = prepare_weekly(week_str)
     daily_count = len(prepare_data.get("daily_reports", []))
@@ -466,10 +476,16 @@ def run_weekly(week_str: str | None = None) -> None:
     log.info(f"╚══ weekly digest done for {week_str} ══╝")
 
 
-def run_monthly(month_str: str | None = None) -> None:
+def run_monthly(month_str: str | None = None, force: bool = False) -> None:
     if not month_str:
         month_str = date_type.today().strftime("%Y-%m")
     log.info(f"╔══ monthly digest run for {month_str} ══╗")
+
+    existing = DIGESTS_DIR / month_str[:4] / "monthly" / f"{month_str}.md"
+    if existing.exists() and not force:
+        log.info(f"  digest already exists ({existing.name}) — skipping (use --force to regenerate)")
+        log.info(f"╚══ monthly digest skipped (exists) for {month_str} ══╝")
+        return
 
     prepare_data = prepare_monthly(month_str)
     daily_count = len(prepare_data.get("daily_reports", []))

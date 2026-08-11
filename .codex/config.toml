@@ -1,0 +1,11 @@
+# Repository defaults are loaded only after the user trusts this project.
+# The archivist writes generated artifacts under archive/ and fetches ArXiv.
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[sandbox_workspace_write]
+network_access = true
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 4

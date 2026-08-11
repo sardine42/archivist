@@ -2,7 +2,7 @@
 
 基于文件系统的论文归档与管理工具，专注于推荐系统和 LLM 领域的 ArXiv 论文追踪。
 所有数据以 JSON / Markdown / PDF 形式存储在 `archive/` 下，无数据库依赖，原生支持 `grep` 检索；
-对外通过 `archivist` CLI 和一组 Claude Code Skill 暴露。
+对外通过 `archivist` CLI 和一组 Codex Skill 暴露。
 
 ## 核心功能
 
@@ -22,13 +22,14 @@
 | CLI 框架 | Click |
 | PDF 处理 | PyMuPDF |
 | 网站渲染 | Jinja2 + Cytoscape.js + KaTeX |
-| LLM 调用 | 本地 `claude -p` CLI（不走 Anthropic API）|
+| LLM 调用 | Codex subagent（会话内）/ `codex exec` CLI（会话外）|
 | 推送通知 | 飞书 (`lark-cli`) |
-| 定时调度 | 系统 crontab + flock(1) |
+| 定时调度 | 会话内 Scheduled + 系统 crontab + flock(1) |
 
 ## 安装
 
 ```bash
+codex --version          # 需已安装并登录 Codex CLI
 uv sync                # 使用 .venv，依赖见 pyproject.toml + uv.lock
 .venv/bin/archivist init
 
@@ -227,6 +228,7 @@ archivist
 │   ├── run-weekly [--week]                    # 周报全流程
 │   ├── run-monthly [--month]                  # 月报全流程
 │   ├── daily-prepare / daily-write            # 底层 prepare / write 拆分
+│   ├── publish --period --id --paper-count     # 无 Agent 的推送 + 部署收尾
 │   ├── weekly-prepare / weekly-write
 │   ├── monthly-prepare / monthly-write
 │   └── list                                   # 列出所有已生成 digest
@@ -247,27 +249,36 @@ archivist
 ├── tags / stats
 ```
 
-## ArXiv 日报流水线（脚本编排）
+## ArXiv 日报流水线
+
+同一套业务步骤支持两种 Agent 编排方式：
+
+| 路径 | 调度者 | 判断型子 Agent |
+|---|---|---|
+| 会话内 | 当前 Codex 主会话运行 `$run-digest` | subagent |
+| 会话外 | 系统 cron → Python orchestrator | `codex exec` CLI 进程 |
+
+会话外路径如下：
 
 ```
 archivist digest run
    ├─ Step 1: archivist arxiv fetch                            [pure code]
-   ├─ Step 2: claude -p (opus) 评分 + 中英摘要                  [LLM]
-   ├─ Step 3: claude -p "/read-paper <id>" (opus) × N          [LLM]
-   ├─ Step 4: digest daily-prepare → claude -p (opus) 综述 → daily-write [LLM]
+   ├─ Step 2: codex exec 评分 + 中英摘要                        [LLM]
+   ├─ Step 3: codex exec "$read-paper <id>" × N                [LLM]
+   ├─ Step 4: digest daily-prepare → codex exec 综述 → daily-write [LLM]
    ├─ Step 5: lark-cli 推送日报 + Pin                          [pure code]
    └─ Step 6: archivist deploy                                  [pure code]
 ```
 
-`digest run` 是确定性 Python orchestrator，仅在三个判断节点（评分 / 精读 / 综述）通过 `claude -p` 短暂出场。
-所有提示词模板在 `src/archivist/services/digest_prompts/` 下，评分标准在 `archive/criteria/scoring-criteria.md`（gitignored，随用户反馈通过 `/refine-rubric` skill 迭代）。
+`digest run` 是会话外的确定性 Python orchestrator，仅在三个判断节点（评分 / 精读 / 综述）通过 `codex exec` 调用 Agent。会话内 `$run-digest` 执行相同的分步 CLI，但由主会话把这三个节点委派给 subagent，且不会调用 `digest run` 或 `codex exec`。
+所有提示词模板在 `src/archivist/services/digest_prompts/` 下，评分标准在 `archive/criteria/scoring-criteria.md`（gitignored，随用户反馈通过 `$refine-rubric` skill 迭代）。
 空日（keyword filter 后无候选，或所有候选都已归档）会短路：不生成主题、不写 stub、不推送、不部署。
 
 详细架构见 `src/archivist/services/digest_runner.py`。
 
-## 自动化调度
+## 会话外自动化
 
-cron + flock 串行调度，所有触发都通过 `~/.claude/settings.json` 的 allow list 自动放行。
+cron + flock 串行调度；Python 执行器以 `codex exec --ephemeral` 启动无人值守任务，并显式使用 workspace-write、网络访问和 `approval_policy=never`。交互式 Codex 会话仍采用 `.codex/config.toml` 的 `on-request` 审批。
 
 ```cron
 # Asia/Shanghai
@@ -285,31 +296,34 @@ CRON_TZ=Asia/Shanghai
 
 详见 `scripts/cron/`。
 
-## Claude Code Skills
+## Codex Skills
 
 | Skill | 说明 |
 |-------|------|
-| `/read-paper` | 下载/定位 PDF、精读、figure 抽取、语义孪生对比、benchmark/DAG 更新 |
-| `/read-doc` | 内部文档精读 — 支持飞书 URL / 本地 PDF / Markdown 三种输入，归档到 `archive/docs/` |
-| `/refine-rubric` | 评分标准反馈闭环 — 多轮对话更新 `archive/criteria/*.md` |
-| `/deploy` | 构建网站 → rsync 到服务器 → 提交 main → push github |
+| `$read-paper` | 下载/定位 PDF、精读、figure 抽取、语义孪生对比、benchmark/DAG 更新 |
+| `$read-doc` | 内部文档精读 — 支持飞书 URL / 本地 PDF / Markdown 三种输入，归档到 `archive/docs/` |
+| `$refine-rubric` | 评分标准反馈闭环 — 多轮对话更新 `archive/criteria/*.md` |
+| `$run-digest` | 在主会话中用 subagent 编排日报、周报或月报并核验落库 |
+| `$schedule-digest` | 配置会话内 Scheduled 或会话外系统 cron |
+| `$deploy` | 构建网站 → rsync 到服务器 → 提交 main → push github |
 
-日报 / 周报 / 月报流程已完全脚本化，**不要通过 Skill 触发**，直接调 `archivist digest run` / `run-weekly` / `run-monthly`。
+`$run-digest` 是会话内路径：确定性步骤调用分步 CLI，判断型步骤派生 subagent；支持 daily、weekly、monthly。系统 cron 是会话外路径：调用端到端 CLI，再由 Python 启动 `codex exec` 子进程。
 
-`/read-paper` 由 `digest run` Step 3 通过 `claude -p "/read-paper <id>"` 串行调用（保留是因为
+`$read-paper` 在会话内由主会话派生的 subagent 调用，在会话外由 `digest run` Step 3 通过 `codex exec` 并行调用（保留是因为
 PDF 阅读、公式抽取、表格还原、figure 插入位置、语义孪生检索、benchmark 冲突解析、DAG 边推断都需要 agent 智能）。
 Step 2.5 的"横向语义孪生检索"会在已归档论文中挖掘问题 + 解法双同构的独立并发工作，把对比写进 `reading.md`。
 
 ### 跨项目访问（MCP server）
 
-`archivist-mcp` 是只读 stdio MCP server，让其它 Claude Code 项目里的 agent 也能查这个文档库
+`archivist-mcp` 是只读 stdio MCP server，让其它 Codex 项目里的 agent 也能查这个文档库
 （搜论文、读精读报告、查 DAG / digest / 标签等）。写路径仍然只在本项目里走。
 
 注册（用户级，所有项目共享）：
 
 ```bash
-claude mcp add archivist /path/to/my_archive/.venv/bin/archivist-mcp \
-  -e ARCHIVIST_ROOT=/path/to/my_archive --scope user
+codex mcp add archivist \
+  --env ARCHIVIST_ROOT=/path/to/my_archive \
+  -- /path/to/my_archive/.venv/bin/archivist-mcp
 ```
 
 之后在任意项目里以 `mcp__archivist__<tool>` 调用。三层渐进披露设计：tier 1 批量加载 →
@@ -321,7 +335,7 @@ tier 2 单篇精读 → tier 3 PDF 原文（rare），让 agent 按需控制 con
 | `search_papers` | 按关键字模糊搜索 | — |
 | `get_paper` | 单篇完整 meta（默认隐藏 score_reason 等内部字段） | — |
 | `get_paper_reading` | 单篇精读 reading.md（5–15k 字符） | tier 2（按需） |
-| `get_paper_pdf` | 返回 PDF 路径 + 页数；agent 用 Read tool 读指定页 | tier 3（罕见） |
+| `get_paper_pdf` | 返回 PDF / content.txt 路径 + 页数；agent 优先读文本并用原 PDF 校对 | tier 3（罕见） |
 | `search_docs` / `get_doc` | 内部文档检索与读取 | — |
 | `list_tags` | 标签白名单 | — |
 | `search_models` / `get_model` | DAG 节点与引用/比较边 | — |
@@ -346,7 +360,7 @@ agent 不需要先调 `list_tags` 就能直接选——加 tag 后重启 MCP ser
    只写 meta.json，不触发 criteria 改动；累积在 `archivist rubric list-pending` 中待后续处理。
 
 2. **Agent 会话驱动**（更新评分标准）：
-   在 Claude Code 会话中以自然语言提反馈（如"这篇只值 5 分，它只是比赛介绍"）或显式 `/refine-rubric <slug>`。Agent 会：
+   在 Codex 会话中以自然语言提反馈（如"这篇只值 5 分，它只是比赛介绍"）或显式 `$refine-rubric <slug>`。Agent 会：
    - CLI 写入 rating + rating_reason
    - 若 rating ≠ auto_score，询问是否更新评分标准
    - 读 criteria + 精读报告 limitations → 提议 1-2 个改动方案
@@ -396,8 +410,8 @@ src/archivist/
 │   ├── feedback.py              # collect_corrections（rating != auto_score 的未消费反馈）
 │   ├── digest.py                # daily/weekly/monthly prepare + write
 │   ├── digest_runner.py         # 端到端 orchestrator (Step 1-6)
-│   ├── digest_prompts/          # claude -p prompt 模板（score / daily_theme / weekly_theme / monthly_theme）
-│   ├── claude_runner.py         # `claude -p` 唯一封装（run_claude / run_claude_json）
+│   ├── digest_prompts/          # codex exec prompt 模板（score / daily_theme / weekly_theme / monthly_theme）
+│   ├── codex_runner.py          # `codex exec` 唯一封装（run_codex / run_codex_json）
 │   └── lark_push.py             # 飞书推送 + Pin
 └── web/
     ├── build.py                 # 静态站点构建
@@ -412,31 +426,33 @@ src/archivist/
         └── benchmark.html       # 含过滤 + 冲突弹窗
 
 scripts/
-├── download-paper.py            # /read-paper 内部用：ArXiv ID / --search / --local 三模式
-├── extract-figures.py           # /read-paper 内部用：抽取 figures + 生成 figures.json
+├── download-paper.py            # $read-paper 内部用：ArXiv ID / --search / --local 三模式
+├── extract-figures.py           # $read-paper 内部用：抽取 figures + 生成 figures.json
 └── cron/
     ├── daily-digest.sh          # flock -n 非阻塞
     ├── weekly-digest.sh         # flock -w 3600 阻塞等日报
     ├── monthly-digest.sh        # flock -w 3600
     └── crontab.txt              # crontab 安装文件
 
-.claude/skills/
+.agents/skills/
 ├── read-paper/
 │   ├── SKILL.md                 # 精读 Skill（含 Step 2.5 语义孪生检索）
 │   └── update-data-schema.md    # paper apply-reading 的 JSON schema
 ├── read-doc/SKILL.md            # 飞书 / PDF / Markdown 精读
 ├── refine-rubric/SKILL.md       # 评分标准反馈闭环
+├── run-digest/SKILL.md          # 主会话 + subagent digest 编排
+├── schedule-digest/SKILL.md     # 会话内 / 会话外调度配置
 └── deploy/SKILL.md              # build + deploy + git push
 
 archive/criteria/                 # gitignored — 个人评分标准，随反馈演化
 ├── scoring-criteria.md           # 摘要评分（digest_runner 拼到 score prompt）
-└── reading-criteria.md           # 精读评分（/read-paper 参考）
+└── reading-criteria.md           # 精读评分（$read-paper 参考）
 ```
 
 ## 设计理念
 
 1. **文件系统即数据库** — 每篇论文独立目录，自包含可移植，`grep` 即查询
 2. **单一元数据源** — `meta.json` 是唯一真相，reading.md 是纯 markdown
-3. **脚本编排 + Agent 边界明确** — 确定性步骤走 Python；判断性步骤走 `claude -p`，输入输出 JSON 化
+3. **双编排边界明确** — 会话内判断走 subagent；会话外判断走 `codex exec`；两路共用确定性 CLI 与 JSON 契约
 4. **Markdown 优先** — Benchmark 排行榜、精读报告、日报均为 Markdown，人类可读且 Git 友好
-5. **本地 LLM CLI** — 不走 Anthropic API，复用 Claude Code 的 settings.json / allow list / 工具空间
+5. **统一 Codex 上下文** — 两条路径都复用 Codex 登录态、`AGENTS.md`、仓库 Skills 与项目 sandbox 配置

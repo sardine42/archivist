@@ -1,7 +1,6 @@
 ---
 name: refine-rubric
-description: 根据用户对论文的评分反馈（rating）优化评分标准（criteria）。当用户在对话中提交评分并与自动评分（score / reading_score）不符时触发；通过多轮对话与用户确认 criteria 改动，最小增量更新 `archive/criteria/scoring-criteria.md`（摘要）或 `archive/criteria/reading-criteria.md`（精读）。触发词：评分反馈、rating、评分不准、评分标准、refine rubric。
-argument-hint: "[<slug>] | [--all-pending]"
+description: 根据用户对论文的评分反馈（rating）优化评分标准（criteria）。用户提交评分、认为评分不准、要求调整评分标准或处理 pending feedback 时使用；通过多轮确认最小增量更新摘要或精读 criteria。
 ---
 
 # 评分标准反馈闭环
@@ -16,7 +15,7 @@ argument-hint: "[<slug>] | [--all-pending]"
 
 ## 参数
 
-- `$ARGUMENTS`：论文 slug（优先），或 `--all-pending` 批量处理所有未消费反馈
+- 从用户调用 `$refine-rubric` 后的文本或当前对话中提取论文 slug；`--all-pending` 表示批量处理所有未消费反馈。
 - 若用户在对话中已给出具体 rating 和 reason，直接从对话提取
 
 ## 工作流
@@ -70,14 +69,14 @@ argument-hint: "[<slug>] | [--all-pending]"
 1. **Paper meta**：已有（从 Step 1 或直接读 `archive/papers/**/meta.json`）
 2. **精读报告**（若 `deeply_read=True`）：
    ```
-   Read archive/papers/<year>/<slug>/reading.md 的"讨论与局限性"/"限制"章节（最后若干段）
+   读取 `archive/papers/<year>/<slug>/reading.md` 的"讨论与局限性"/"限制"章节（最后若干段）
    ```
    重点看 agent 自己是否已识别相关弱点——这常是 rubric 盲区的信号
 3. **主 criteria 文件**（按 `deeply_read` 路由）：
    - `deeply_read=False` → `archive/criteria/scoring-criteria.md`
    - `deeply_read=True`  → `archive/criteria/reading-criteria.md`
 4. **另一份 criteria**：一眼读过，判断反馈是否也该影响另一阶段评分
-5. **（可选）类似先例**：用 Grep 在 `archive/papers/*/*/meta.json` 搜 rating 或 score 相近的历史 paper，看是否存在模式
+5. **（可选）类似先例**：在 `archive/papers/*/*/meta.json` 搜 rating 或 score 相近的历史 paper，看是否存在模式
 
 ### Step 5. 推理 + 向用户提议改动
 
@@ -117,7 +116,7 @@ argument-hint: "[<slug>] | [--all-pending]"
 ### Step 7. 应用改动 + 标记
 
 **若用户在 Step 3/6 选"更新"**：
-- 用 `Edit` 工具修改目标 criteria 文件（`archive/criteria/scoring-criteria.md` 或 `archive/criteria/reading-criteria.md`）
+- 修改目标 criteria 文件（`archive/criteria/scoring-criteria.md` 或 `archive/criteria/reading-criteria.md`）
 - 修改的段落末尾追加可追溯注释：
   ```
   <!-- refined from rating feedback: <slug> -->

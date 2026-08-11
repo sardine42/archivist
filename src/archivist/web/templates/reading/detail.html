@@ -93,7 +93,7 @@
             {% endif %}
             <a href="/reading/{{ paper.year }}/{{ paper.slug }}/pdf" class="meta-link">PDF</a>
             {% if paper.generated_by %}
-            <span class="meta-generated-by">{{ paper.generated_by }}</span>
+            <span class="meta-generated-by">{{ paper.generated_by }}{% if paper.reasoning_effort %} · {{ paper.reasoning_effort }}{% endif %}</span>
             {% endif %}
             {% if paper.date_added %}
             <span class="meta-date-added">Archived {{ paper.date_added[:10] }}</span>

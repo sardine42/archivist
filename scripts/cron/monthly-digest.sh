@@ -11,14 +11,15 @@ LOG_DIR="$PROJECT_ROOT/logs/cron"
 LOCK_FILE="/tmp/archivist-digest.lock"
 LOG_FILE="$LOG_DIR/monthly-digest-$(date +%F).log"
 ARCHIVIST="$PROJECT_ROOT/.venv/bin/archivist"
+PYTHON="$PROJECT_ROOT/.venv/bin/python"
 
 mkdir -p "$LOG_DIR"
 cd "$PROJECT_ROOT"
 export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
 export PYTHONUNBUFFERED=1   # 实时刷日志:429/重试等 print 立即落盘,不被块缓冲伪装成卡死
 
-# Cover the previous calendar month
-MONTH_ARG="$(date -d "last month" +%Y-%m)"
+# Cover the previous calendar month. Use Python rather than GNU/BSD-specific date flags.
+MONTH_ARG="$("$PYTHON" -c 'from datetime import date, timedelta; d = date.today().replace(day=1) - timedelta(days=1); print(d.strftime("%Y-%m"))')"
 
 {
     echo

@@ -38,7 +38,8 @@ class PaperMeta:
     rating: int | None = None            # 人工评分 (1-10)，"对我多有用"；见 refine-rubric skill
     rating_reason: str = ""
     feedback_consumed: bool = False      # refine-rubric 已处理（采纳或明确跳过均置 True）
-    generated_by: str = ""               # 生成此文档的模型，如 "claude-opus-4-6"
+    generated_by: str = ""               # 生成此文档的具体模型 ID
+    reasoning_effort: str = ""           # 生成时的 reasoning effort，如 "high"
     model_name: str = ""                 # 论文提出的核心模型/方法缩写
     published_date: str = ""             # 论文发布日期 (YYYY-MM-DD)
     reading_score: float = 0.0           # 精读评分 (agent 产出, 1-10)

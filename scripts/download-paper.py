@@ -18,7 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from archivist.config import PAPERS_BRIEF_DIR, PAPERS_DIR, ensure_archive_dirs
 from archivist.models import PaperMeta
-from archivist.utils import generate_id, slugify, write_json
+from archivist.services.pdf_extract import extract_text
+from archivist.utils import generate_id, slugify, write_json, write_text
 
 
 def _inherit_brief_score(meta: PaperMeta, arxiv_id: str) -> None:
@@ -119,6 +120,7 @@ def main():
         parser.error("需要 arxiv_id、--local <pdf> 或 --search <标题>")
 
     write_json(paper_dir / "meta.json", meta.to_dict())
+    write_text(paper_dir / "content.txt", extract_text(paper_dir / "document.pdf"))
     print(paper_dir)
 
 

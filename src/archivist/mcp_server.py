@@ -1,7 +1,7 @@
 """Read-only MCP server exposing the archivist library to other projects.
 
-Run as `archivist-mcp` (stdio). Other Claude Code projects register it via
-`~/.claude.json` and gain `search_papers`, `get_paper_reading`, etc. as tools.
+Run as `archivist-mcp` (stdio). Codex projects can register it in
+`config.toml` and gain `search_papers`, `get_paper_reading`, etc. as tools.
 Set `$ARCHIVIST_ROOT` to point at the archive project root; falls back to
 auto-detection from this file's location (see `archivist.config`).
 """
@@ -429,10 +429,10 @@ def get_paper_pdf(slug: str) -> dict[str, Any] | None:
     """Tier-3 escape hatch: resolve a paper's PDF path so you can read it directly.
 
     USAGE: this tool returns the PDF's filesystem path. To read its contents
-    you MUST use Claude Code's built-in Read tool with the `pages` argument
-    (e.g. Read(file_path=pdf_path, pages="5-8")). Do NOT extract text via
-    pymupdf, pdfplumber, or any other library — Read handles PDFs natively
-    and is the only sanctioned path here.
+    inspect the PDF with the file/PDF capabilities available on your Codex
+    surface. In CLI-only environments, prefer an existing ``content.txt``;
+    otherwise use a local PDF text extractor and verify tables or figures
+    against the original pages.
 
     Reach for this only when get_paper_reading didn't answer your question
     (e.g. you need a specific algorithm, table, or figure caption verbatim).
@@ -441,7 +441,8 @@ def get_paper_pdf(slug: str) -> dict[str, Any] | None:
     Args:
         slug: The paper slug (from search_papers / load_papers).
 
-    Returns: {slug, title, pdf_path, page_count, size_bytes, read_hint} on
+    Returns: {slug, title, pdf_path, content_path, page_count, size_bytes,
+        read_hint} on
         success; {slug, pdf_path: None, reason} for brief / missing papers;
         None if the slug is not in the archive at all.
     """
@@ -457,6 +458,7 @@ def get_paper_pdf(slug: str) -> dict[str, Any] | None:
             "slug": slug,
             "title": paper.title,
             "pdf_path": None,
+            "content_path": None,
             "reason": "brief paper, no PDF archived",
         }
 
@@ -465,15 +467,17 @@ def get_paper_pdf(slug: str) -> dict[str, Any] | None:
     with pymupdf.open(pdf_path) as doc:
         page_count = len(doc)
 
+    content_path = paper_dir / "content.txt"
     return {
         "slug": slug,
         "title": paper.title,
         "pdf_path": str(pdf_path),
+        "content_path": str(content_path) if content_path.exists() else None,
         "page_count": page_count,
         "size_bytes": pdf_path.stat().st_size,
-        "read_hint": "Use Claude Code's Read tool with this path and a `pages` arg "
-                     "(e.g. pages='5-8') to extract specific pages. Do not use any "
-                     "other PDF parsing library.",
+        "read_hint": "Prefer content_path when present. Otherwise use the PDF "
+                     "capabilities available on your Codex surface or extract text "
+                     "locally; verify tables and figures against the original PDF.",
     }
 
 

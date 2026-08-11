@@ -2,7 +2,7 @@
 
 Three-stage filtering:
 1. Pre-filter (code): whitelist keywords + blocked affiliations + deduplication
-2. LLM scoring (Claude): evaluate relevance based on abstract — done by digest_runner
+2. LLM scoring (Codex): evaluate relevance based on abstract — done by digest_runner
 3. Deep-read selection: top_k_deep_read papers with score >= deep_read_threshold
 """
 
@@ -271,7 +271,7 @@ def archive_scored_paper(
         "skip_reason": score_result.get("skip_reason", ""),
         "read_status": "unread",
         "rating": None,
-        "generated_by": "claude-runner-script",
+        "generated_by": "codex-runner-script",
         "model_name": score_result.get("model_name", "") or "",
         "published_date": paper.published[:10] if paper.published else "",
         "reading_score": 0.0,

@@ -1,13 +1,12 @@
 ---
 name: read-doc
-description: 内部文档精读与归档。支持飞书文档、PDF、Markdown 三种输入，精读生成阅读报告，提取图表，归档到个人文档。
-argument-hint: "<飞书URL | PDF路径 | MD路径> [--title \"标题\"]"
+description: 内部文档精读与归档。用户要求阅读、精读或归档飞书文档、本地 PDF、Markdown 时使用；生成中文阅读报告、提取图表并写入个人文档库。
 ---
 
 # 内部文档精读与归档
 
 ## 参数
-- `$ARGUMENTS`: 飞书文档 URL、本地 PDF 路径或本地 Markdown 路径，可选 `--title "文档标题"`
+- 从用户调用 `$read-doc` 后的文本或当前对话中提取飞书文档 URL、本地 PDF 路径或本地 Markdown 路径；可接受 `--title "文档标题"`。
 
 ## 流程
 
@@ -33,6 +32,10 @@ argument-hint: "<飞书URL | PDF路径 | MD路径> [--title \"标题\"]"
 1. 从文件名或 `--title` 派生 slug
 2. 创建归档目录 `archive/docs/<slug>/`
 3. 复制 PDF 到 `archive/docs/<slug>/document.pdf`
+4. 用项目已有依赖抽取可检索正文：
+   ```bash
+   .venv/bin/python -c 'import sys; from pathlib import Path; from archivist.services.pdf_extract import extract_text; Path(sys.argv[2]).write_text(extract_text(Path(sys.argv[1])), encoding="utf-8")' archive/docs/<slug>/document.pdf archive/docs/<slug>/content.txt
+   ```
 
 **本地 Markdown**（匹配 `.md` 后缀）：
 1. 从文件名或 `--title` 派生 slug
@@ -66,7 +69,7 @@ uv run python3 scripts/extract-figures.py archive/docs/<slug>/document.pdf archi
 
 ### 3. 精读文档
 
-**必须直接用 Read 工具读取原始内容**：PDF 用 pages 参数分页读取（每次最多 20 页），飞书/Markdown 读取处理后的文件。
+**必须读取完整原始内容**：飞书/Markdown 读取处理后的文本文件；PDF 先用项目已有的 PyMuPDF 依赖抽取为 `content.txt`，再按页分段读取。用提取出的 figures 校对公式、表格和版面信息，不要只凭图片猜测正文。
 
 生成中文精读文档，要求与论文精读完全一致：
 
@@ -94,7 +97,7 @@ uv run python3 scripts/extract-figures.py archive/docs/<slug>/document.pdf archi
 
 ### 4. 写入 reading.md
 
-用 Write 工具写入 `archive/docs/<slug>/reading.md`，格式：
+写入 `archive/docs/<slug>/reading.md`，格式：
 
 ```markdown
 ---

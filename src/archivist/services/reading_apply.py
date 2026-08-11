@@ -20,7 +20,7 @@ _META_FIELDS = [
     "one_line_summary", "one_line_summary_en",
     "tags", "proposed_tags", "model_name",
     "reading_score", "reading_score_reason",
-    "published_date", "generated_by",
+    "published_date", "generated_by", "reasoning_effort",
     "url",
 ]
 
@@ -42,7 +42,7 @@ def _normalize_category(value) -> list[str]:
 def apply_reading(data: dict) -> dict:
     """Apply a deep-read result. Returns a summary of what was updated.
 
-    Schema: see .claude/skills/read-paper/update-data-schema.md
+    Schema: see .agents/skills/read-paper/update-data-schema.md
     """
     arxiv_id = data["arxiv_id"]
     paper_dir = Path(data["paper_dir"])

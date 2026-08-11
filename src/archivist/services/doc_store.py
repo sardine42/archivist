@@ -69,7 +69,7 @@ def add_doc(
 def _parse_reading(md_file: Path) -> tuple[DocMeta, str]:
     """Parse a ``docs/<slug>/reading.md`` into ``(DocMeta, body)``.
 
-    Docs are written by the ``/read-doc`` skill as ``reading.md`` with YAML
+    Docs are written by the ``$read-doc`` skill as ``reading.md`` with YAML
     frontmatter (``title / source / type / date / team / summary``) — there is
     no ``meta.json``. We synthesize a ``DocMeta`` from the frontmatter so the
     CLI and MCP doc tools see exactly the docs the website does (which reads

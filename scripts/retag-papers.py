@@ -2,7 +2,7 @@
 """Re-tag deeply-read papers under the new flat tag taxonomy.
 
 Only processes papers with a `reading.md` file (i.e. those that went
-through the deep-read pipeline). For each, sends Claude the full reading
+through the deep-read pipeline). For each, sends Codex the full reading
 report — much richer than the abstract — and asks for a fresh tag list
 drawn strictly from config.yaml's flat whitelist, plus optional
 `proposed_tags` for genuinely missing taxonomy entries.
@@ -19,7 +19,7 @@ Usage:
   python scripts/retag-papers.py --apply --filter-score 7   # only score≥7
 
 Each apply shells out to `archivist paper edit`, which validates against
-the whitelist (CLAUDE.md: agents must write through the CLI, not by
+the whitelist (AGENTS.md: agents must write through the CLI, not by
 direct meta.json edits).
 """
 
@@ -33,8 +33,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from archivist.config import PAPERS_DIR
-from archivist.services.claude_runner import ClaudeRunnerError, run_claude_json
+from archivist.config import PAPERS_DIR, PROJECT_ROOT
+from archivist.services.codex_runner import CodexRunnerError, run_codex_json
 from archivist.services.tag_registry import load_whitelist
 
 
@@ -120,7 +120,7 @@ def _deeply_read_paper_dirs() -> list[Path]:
 
 
 def _retag_one(meta: dict, reading_md: str, whitelist_table: str) -> dict:
-    """Call Claude and return {"tags": [...], "proposed_tags": [...]}."""
+    """Call Codex and return {"tags": [...], "proposed_tags": [...]}."""
     # Cap reading_md to keep prompt size bounded; deep-read reports are 3-15K
     # tokens typically. 12000 chars ≈ 3-4K tokens, plenty of signal.
     prompt = PROMPT_TEMPLATE.format(
@@ -132,7 +132,7 @@ def _retag_one(meta: dict, reading_md: str, whitelist_table: str) -> dict:
         old_keywords=", ".join((meta.get("keywords") or [])[:10]) or "(none)",
         reading_md=reading_md[:12000],
     )
-    result = run_claude_json(prompt, model="opus", retries=2, timeout=300)
+    result = run_codex_json(prompt, cwd=PROJECT_ROOT, retries=2, timeout=300)
     if not isinstance(result, dict):
         raise ValueError(f"Expected JSON object, got {type(result).__name__}")
     return {
@@ -210,7 +210,7 @@ def main() -> int:
         old_tags = list(meta.get("tags") or [])
         try:
             result = _retag_one(meta, reading_md, whitelist_table)
-        except (ClaudeRunnerError, ValueError) as e:
+        except (CodexRunnerError, ValueError) as e:
             print(f"  {slug}: ERROR {e}", file=sys.stderr)
             continue
 

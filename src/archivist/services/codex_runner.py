@@ -1,13 +1,13 @@
-"""Thin wrapper around the local `claude -p` CLI.
+"""Thin wrapper around the local ``codex exec`` CLI.
 
 The digest orchestrator (and any future script that needs LLM judgment)
-shells out through this module instead of calling the Anthropic API
+shells out through this module instead of calling the OpenAI API
 directly. Reasons:
 
-- Reuses the user's local auth, settings.json allow-list, and tool budget
+- Reuses the user's local Codex authentication and repository instructions
 - No API keys to manage
-- Same backend cost, easier to swap models per call
-- Honours `--dangerously-skip-permissions --permission-mode bypassPermissions`
+- Leaves model selection to the user's Codex default unless explicitly overridden
+- Uses an ephemeral, non-interactive workspace-write run with network access
   for cron-friendly execution
 """
 
@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 
-class ClaudeRunnerError(RuntimeError):
-    """Raised when `claude -p` returns a non-success result or unparsable JSON."""
+class CodexRunnerError(RuntimeError):
+    """Raised when ``codex exec`` fails or returns unparsable JSON."""
 
 
 _CODE_FENCE_RE = re.compile(r"^```(?:json|JSON)?\s*\n?(.*?)\n?```\s*$", re.DOTALL)
@@ -199,73 +199,66 @@ def _try_parse_json(text: str) -> Any | None:
     return None
 
 
-def run_claude(
+def run_codex(
     prompt: str,
     *,
-    model: str = "opus",
+    model: str | None = None,
     cwd: Path | str | None = None,
     timeout: int = 1800,
 ) -> str:
-    """Invoke `claude -p` and return the model's textual response.
+    """Invoke ``codex exec`` and return its final agent message.
 
-    Always uses ``--output-format json`` so we can inspect the envelope
-    (``permission_denials``, ``is_error``) before returning. The caller
-    receives the inner ``result`` string with any markdown code fence
-    stripped.
-
-    Raises ``ClaudeRunnerError`` if the envelope reports an error or any
-    permission denial occurred.
+    The prompt is passed on stdin so large candidate batches do not hit the
+    operating system's command-line length limit. Progress stays on stderr;
+    stdout contains only the final message.
     """
     cmd = [
-        "claude",
-        "-p",
-        prompt,
-        "--model",
-        model,
-        "--dangerously-skip-permissions",
-        "--permission-mode",
-        "bypassPermissions",
-        "--output-format",
-        "json",
+        "codex",
+        "exec",
+        "--ephemeral",
+        "--sandbox",
+        "workspace-write",
+        "--config",
+        'approval_policy="never"',
+        "--config",
+        "sandbox_workspace_write.network_access=true",
+        "--color",
+        "never",
     ]
-    proc = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        cwd=str(cwd) if cwd else None,
-        timeout=timeout,
-    )
-    if proc.returncode != 0:
-        raise ClaudeRunnerError(
-            f"claude -p exited {proc.returncode}\nstderr: {proc.stderr[:500]}"
-        )
+    if model:
+        cmd.extend(["--model", model])
+    cmd.append("-")
     try:
-        envelope = json.loads(proc.stdout)
-    except json.JSONDecodeError as e:
-        raise ClaudeRunnerError(
-            f"claude -p stdout was not JSON: {e}\nfirst 500 chars: {proc.stdout[:500]}"
-        ) from e
-
-    if envelope.get("is_error"):
-        raise ClaudeRunnerError(
-            f"claude -p returned is_error=true: {envelope.get('result', '')[:500]}"
+        proc = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            cwd=str(cwd) if cwd else None,
+            timeout=timeout,
         )
-    denials = envelope.get("permission_denials") or []
-    if denials:
-        raise ClaudeRunnerError(f"claude -p hit permission denials: {denials!r}")
+    except FileNotFoundError as e:
+        raise CodexRunnerError(
+            "codex CLI not found; install it and authenticate before running the digest"
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise CodexRunnerError(f"codex exec timed out after {timeout}s") from e
+    if proc.returncode != 0:
+        raise CodexRunnerError(
+            f"codex exec exited {proc.returncode}\nstderr: {proc.stderr[:1000]}"
+        )
+    return _strip_md_fence(proc.stdout)
 
-    return _strip_md_fence(envelope.get("result", ""))
 
-
-def run_claude_json(
+def run_codex_json(
     prompt: str,
     *,
-    model: str = "opus",
+    model: str | None = None,
     cwd: Path | str | None = None,
     timeout: int = 1800,
     retries: int = 1,
 ) -> Any:
-    """Like ``run_claude`` but parses the response as JSON.
+    """Like ``run_codex`` but parses the response as JSON.
 
     Retries up to ``retries`` times on JSON parse failure (the model
     occasionally inserts stray prose despite the prompt). Returns the
@@ -273,7 +266,7 @@ def run_claude_json(
     """
     last_text = ""
     for attempt in range(retries + 1):
-        text = run_claude(prompt, model=model, cwd=cwd, timeout=timeout)
+        text = run_codex(prompt, model=model, cwd=cwd, timeout=timeout)
         last_text = text
         parsed = _try_parse_json(text)
         if parsed is not None:
@@ -284,12 +277,12 @@ def run_claude_json(
         try:
             json.loads(text)  # re-raise to capture the original decode error
         except json.JSONDecodeError as e:
-            raise ClaudeRunnerError(
-                f"claude -p result was not valid JSON after {attempt + 1} tries: {e}\n"
+            raise CodexRunnerError(
+                f"codex exec result was not valid JSON after {attempt + 1} tries: {e}\n"
                 f"first 500 chars: {last_text[:500]}"
             ) from e
     # Unreachable
-    raise ClaudeRunnerError(
-        f"claude -p result unparsable after {retries + 1} tries; "
+    raise CodexRunnerError(
+        f"codex exec result unparsable after {retries + 1} tries; "
         f"first 500 chars: {last_text[:500]}"
     )

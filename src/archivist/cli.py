@@ -133,6 +133,11 @@ def paper_show(slug: str):
         click.echo(f"Published:  {paper.published_date}")
     if paper.url:
         click.echo(f"URL:        {paper.url}")
+    if paper.generated_by:
+        generator = paper.generated_by
+        if paper.reasoning_effort:
+            generator += f" ({paper.reasoning_effort})"
+        click.echo(f"Generated:  {generator}")
     if paper.notes:
         click.echo(f"Notes:      {paper.notes}")
     click.echo(f"Added:      {paper.date_added}")
@@ -148,7 +153,7 @@ def paper_show(slug: str):
                    "Prefer the proposed_tags pipeline + `archivist tag promote`.")
 @click.option("--status", help="Set read status: unread/reading/read")
 @click.option("--rating", type=int, help="Set rating (1-10)")
-@click.option("--rating-reason", help="Reason/note for the rating (used by /refine-rubric)")
+@click.option("--rating-reason", help="Reason/note for the rating (used by $refine-rubric)")
 @click.option("--feedback-consumed/--no-feedback-consumed", default=None,
               help="Mark feedback as processed (avoids re-triggering refine-rubric)")
 @click.option("--category", "-c", help="Set category (comma-separated, 可多选): generative-rec / discriminative-rec / llm / other")
@@ -158,6 +163,8 @@ def paper_show(slug: str):
 @click.option("--published-date", help="Set published date (YYYY-MM-DD)")
 @click.option("--url", help="Set ArXiv URL")
 @click.option("--arxiv-id", help="Set arXiv ID (e.g. 1234.56789 or 1234.56789v1). Normally set by download-paper.py; use this only when that flow failed.")
+@click.option("--generated-by", help="Set the exact Codex model ID used for the deep read.")
+@click.option("--reasoning-effort", help="Set the reasoning effort used for the deep read.")
 def paper_edit(slug: str, tags: str | None, proposed_tags: str | None,
                allow_new_tag: tuple[str, ...],
                status: str | None, rating: int | None,
@@ -165,12 +172,13 @@ def paper_edit(slug: str, tags: str | None, proposed_tags: str | None,
                category: str | None, title: str | None, model_name: str | None,
                reading_score: float | None,
                published_date: str | None, url: str | None,
-               arxiv_id: str | None):
+               arxiv_id: str | None, generated_by: str | None,
+               reasoning_effort: str | None):
     """Edit paper metadata (writes to meta.json).
 
     Feedback note: setting --rating alone (with or without --rating-reason) only
     stores the data. CLI does not trigger criteria refinement. To iterate criteria
-    based on feedback, use the /refine-rubric skill in a Claude Code session.
+    based on feedback, use the $refine-rubric skill in a Codex session.
     """
     kwargs = {}
     if tags is not None:
@@ -212,6 +220,10 @@ def paper_edit(slug: str, tags: str | None, proposed_tags: str | None,
         kwargs["url"] = url
     if arxiv_id is not None:
         kwargs["arxiv_id"] = arxiv_id
+    if generated_by is not None:
+        kwargs["generated_by"] = generated_by
+    if reasoning_effort is not None:
+        kwargs["reasoning_effort"] = reasoning_effort
 
     if not kwargs:
         click.echo("No changes specified.")
@@ -230,7 +242,7 @@ def paper_apply_reading(data_file: Path):
     """Apply a deep-read result: updates meta, benchmarks, DAG, and progress.
 
     Called by the read-paper skill after finishing a deep read. See
-    .claude/skills/read-paper/update-data-schema.md for the data.json schema.
+    .agents/skills/read-paper/update-data-schema.md for the data.json schema.
     """
     from archivist.services.reading_apply import apply_reading
 
@@ -261,7 +273,7 @@ def paper_backfill(field: tuple[str], dry_run: bool):
     """List papers with missing fields for agent backfill.
 
     Scans all papers and reports which ones are missing the specified fields.
-    Run in a Claude Code session so the agent can read papers and fill values.
+    Run in a Codex session so the agent can read papers and fill values.
     """
     papers = paper_store.list_papers()
     if not papers:
@@ -377,7 +389,7 @@ def dag_list_nodes():
 def rubric_group():
     """Inspect scoring feedback (read-only).
 
-    Criteria updates are handled by the /refine-rubric skill in a Claude Code
+    Criteria updates are handled by the $refine-rubric skill in a Codex
     session — this group only surfaces the data.
     """
     pass
@@ -696,12 +708,12 @@ def arxiv_fetch(date: str | None, date_from: str | None, date_to: str | None,
 def arxiv_apply_scores(date: str, scores_path: str, candidates_path: str | None):
     """Apply agent scores: write brief metas + emit the deep-read shortlist.
 
-    The script half of the subagent scoring step: reads the candidates file
+    The script half of manual agent scoring: reads the candidates file
     (from `arxiv fetch`) plus an agent-produced scores JSON, writes a brief
     meta.json per scored paper (score>=4, not already archived), and prints
     JSON {briefs_written, shortlist} where `shortlist` is the deep-read set
-    (score>=deep_read_threshold, not existing, top_k) for the orchestrator to
-    fan out `/read-paper` over.
+    (score>=deep_read_threshold, not existing, top_k) for an orchestrator to
+    run through `$read-paper`.
     """
     import json
     from archivist.config import load_config
@@ -856,7 +868,7 @@ def digest_group():
 def cmd_digest_fetch_candidates(date: str):
     """Fetch + pre-filter candidates for a digest date's coverage range.
 
-    The script half of Step 1 for the in-session subagent orchestrator: resolves
+    The script half of Step 1 for manual in-session orchestration: resolves
     the coverage range (weekend-aware), fetches + dedups exactly like the
     headless pipeline, writes _candidates_<date>.json (for `arxiv apply-scores`),
     and prints JSON {date, coverage, total_candidates, candidates_file}.
@@ -908,6 +920,25 @@ def cmd_digest_daily_write(date: str, json_path: str):
     agent_data = json.loads(Path(json_path).read_text(encoding="utf-8"))
     out = write_daily(date, agent_data)
     click.echo(f"Written: {out}")
+
+
+@digest_group.command("publish")
+@click.option(
+    "--period",
+    type=click.Choice(["daily", "weekly", "monthly"]),
+    required=True,
+    help="Digest period type.",
+)
+@click.option("--id", "digest_id", required=True, help="Digest date/week/month identifier.")
+@click.option("--paper-count", type=int, required=True, help="Number of papers in the digest.")
+def cmd_digest_publish(period: str, digest_id: str, paper_count: int):
+    """Push an already-written digest and deploy it without invoking an Agent."""
+    if paper_count < 0:
+        raise click.ClickException("paper-count must be non-negative")
+    from archivist.services.digest_runner import _deploy, _push
+
+    _push(period, digest_id, paper_count)
+    _deploy()
 
 
 @digest_group.command("weekly-prepare")
@@ -986,7 +1017,8 @@ def cmd_digest_run(date: str | None, force: bool):
     """Full daily digest pipeline (fetch → score → read → digest → push → deploy).
 
     Idempotent: skips if the date's digest already exists (use --force to
-    regenerate), so OS cron and the in-session scheduler never double-run a day.
+    regenerate). External callers must still use /tmp/archivist-digest.lock to
+    avoid overlapping before either run writes the digest artifact.
     """
     from archivist.services.digest_runner import run_daily
     try:
@@ -999,11 +1031,13 @@ def cmd_digest_run(date: str | None, force: bool):
 @digest_group.command("run-weekly")
 @click.option("--week", "-w", default=None,
               help="YYYY-Www; default: current ISO week")
-def cmd_digest_run_weekly(week: str | None):
+@click.option("--force", is_flag=True,
+              help="Regenerate even if this week's digest already exists.")
+def cmd_digest_run_weekly(week: str | None, force: bool):
     """Full weekly digest pipeline (aggregate → digest → push → deploy)."""
     from archivist.services.digest_runner import run_weekly
     try:
-        run_weekly(week)
+        run_weekly(week, force=force)
     except Exception as e:
         click.echo(f"weekly digest failed: {e}", err=True)
         raise SystemExit(1)
@@ -1012,11 +1046,13 @@ def cmd_digest_run_weekly(week: str | None):
 @digest_group.command("run-monthly")
 @click.option("--month", "-m", default=None,
               help="YYYY-MM; default: current month")
-def cmd_digest_run_monthly(month: str | None):
+@click.option("--force", is_flag=True,
+              help="Regenerate even if this month's digest already exists.")
+def cmd_digest_run_monthly(month: str | None, force: bool):
     """Full monthly digest pipeline (aggregate → digest → push → deploy)."""
     from archivist.services.digest_runner import run_monthly
     try:
-        run_monthly(month)
+        run_monthly(month, force=force)
     except Exception as e:
         click.echo(f"monthly digest failed: {e}", err=True)
         raise SystemExit(1)

@@ -1,13 +1,13 @@
 ---
 name: read-paper
-description: 论文下载、精读与归档。自动下载 Arxiv 论文 PDF（支持按 ID、标题搜索或本地路径），精读生成阅读报告，更新 Benchmark 和模型迭代图。无需预先下载，skill 内含完整的下载流程。
-argument-hint: "<arxiv_id | 论文标题> [--title \"论文标题\"]"
+description: 论文下载、精读与归档。用户要求阅读、精读或归档 ArXiv 论文或本地论文 PDF 时使用；支持 ID、标题搜索和本地路径，生成中文阅读报告并更新 Benchmark 与模型迭代图。
 ---
 
 # 论文精读与归档
 
 ## 参数
-- `$ARGUMENTS`: Arxiv ID（如 `1234.56789`）、论文标题（如 `"OneRec Technical Report"`）或本地 PDF 路径，可选 `--title "论文标题"`
+- 从用户调用 `$read-paper` 后的文本或当前对话中提取 ArXiv ID（如 `1234.56789`）、论文标题或本地 PDF 路径；可接受 `--title "论文标题"`。
+- 接受 `--generated-by <model-id>` 与 `--reasoning-effort <effort>`。主会话传入时必须原样写入元数据。
 
 ## 流程
 
@@ -15,18 +15,18 @@ argument-hint: "<arxiv_id | 论文标题> [--title \"论文标题\"]"
 
 如果参数是 Arxiv ID（匹配 `\d{4}\.\d{4,5}` 格式）：
 ```bash
-python3 scripts/download-paper.py <arxiv_id> --title "<标题>"
+.venv/bin/python scripts/download-paper.py <arxiv_id> --title "<标题>"
 ```
 如果参数是论文标题（非 Arxiv ID 格式且非本地路径）：
 ```bash
-python3 scripts/download-paper.py --search "<论文标题>"
+.venv/bin/python scripts/download-paper.py --search "<论文标题>"
 ```
 如果参数是本地 PDF 路径：
 ```bash
-python3 scripts/download-paper.py --local <pdf_path> --title "<标题>"
+.venv/bin/python scripts/download-paper.py --local <pdf_path> --title "<标题>"
 ```
 
-脚本输出论文目录路径（如 `archive/papers/2026/xxx/`），目录包含 `document.pdf` + `meta.json`。
+脚本输出论文目录路径（如 `archive/papers/2026/xxx/`），目录包含 `document.pdf`、`content.txt` 和 `meta.json`。
 
 ### 1.5. 提取图片
 
@@ -40,7 +40,13 @@ uv run python3 scripts/extract-figures.py <paper_dir>/document.pdf <paper_dir>/f
 
 ### 2. 精读论文
 
-**必须直接用 Read 工具读 PDF**（`document.pdf`，pages 参数分页读取，每次最多 20 页）。**禁止使用 Python 库（pymupdf/fitz/PyPDF2 等）将 PDF 转换为文本。**
+**必须完整读取论文**。优先读取论文目录里的 `content.txt`；若不存在，执行以下命令生成后再分段读取：
+
+```bash
+.venv/bin/python -c 'import sys; from pathlib import Path; from archivist.services.pdf_extract import extract_text; Path(sys.argv[2]).write_text(extract_text(Path(sys.argv[1])), encoding="utf-8")' <paper_dir>/document.pdf <paper_dir>/content.txt
+```
+
+结合 `figures/figures.json` 和提取图片校对公式、表格、图注与版面，不能只读摘要或只凭图片猜正文。
 
 **纵向前置概念检索**：当论文引用了其他论文的关键概念或方法，且**必须理解前置论文内容才能准确解读当前论文**时，可用 Grep 工具在 `archive/papers/` 下搜索 `reading.md` 获取相关精读报告。仅在核心方案直接依赖前置工作时才检索。（与 Step 2.5 的**横向语义孪生检索**分工：这里是为了看懂当前论文，Step 2.5 是为了挖掘独立并发工作。）
 
@@ -141,8 +147,8 @@ PY
 
 对初筛候选，agent 先做两次便宜的检索：
 
-- **(a) 当前论文 PDF**：Read 搜候选的 `arxiv_id` / `model_name`，判断是否被引用；
-- **(b) 当前论文精读草稿**：Grep 搜候选的 `model_name`，判断原文讨论深度。
+- **(a) 当前论文正文**：在 `content.txt` 中搜索候选的 `arxiv_id` / `model_name`，判断是否被引用；
+- **(b) 当前论文精读草稿**：搜索候选的 `model_name`，判断原文讨论深度。
 
 **是否加载对方 `reading.md` 由 agent 判断，不靠硬规则。** 原则：
 
@@ -159,7 +165,7 @@ PY
 
 **关键原则**：**节省 token 不是首要目标——5k-10k tokens 读一篇 reading.md 的代价远低于漏掉一个有价值孪生对比的代价。有疑虑就读**。
 
-对决定加载的候选，用 Read 读其 `reading.md`，只看"研究动机与背景"和"核心方法 / 模型架构"两章（不用读实验部分），深度终判：问题陈述实质同构 AND 技术骨架实质相近。未通过的剔除。**最终保留 ≤3 篇**。
+对决定加载的候选，读取其 `reading.md`，只看"研究动机与背景"和"核心方法 / 模型架构"两章（不用读实验部分），深度终判：问题陈述实质同构 AND 技术骨架实质相近。未通过的剔除。**最终保留 ≤3 篇**。
 
 #### 2.5.5 写入对比章节
 
@@ -207,9 +213,11 @@ PY
 
 ### 3. 写入 reading.md
 
-用 Write 工具写入论文目录。
+写入论文目录。
 
 ### 4. 更新元数据、Benchmark 和 DAG
+
+**模型署名**：优先使用调用参数中的 `--generated-by` 和 `--reasoning-effort`。没有参数时，从当前 Codex session 的 `turn_context` 确认实际 `model` 与 `collaboration_mode.settings.reasoning_effort`；能确认时写精确值，不能确认时才分别写 `"codex"` 和空字符串，禁止猜测。`generated_by` 与 `reasoning_effort` 必须同时出现在 Step 4 JSON 的 `meta` 中。
 
 **标签选择**：从 `config.yaml` 的 `tags` 部分选择结构化标签，优先使用已有标签。仅当论文方向与现有标签显著不同时才创建新标签。每篇论文至少 1 个 task 标签 + 1 个 method 标签 + 1 个 scene 标签。
 

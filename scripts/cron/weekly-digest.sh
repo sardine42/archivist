@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Weekly digest cron entrypoint. Runs on Monday for the previous ISO week.
+# Weekly digest cron entrypoint. Runs on Tuesday for the previous ISO week.
 # Shares /tmp/archivist-digest.lock with daily/monthly so they serialize.
 
 set -uo pipefail
@@ -11,14 +11,15 @@ LOG_DIR="$PROJECT_ROOT/logs/cron"
 LOCK_FILE="/tmp/archivist-digest.lock"
 LOG_FILE="$LOG_DIR/weekly-digest-$(date +%F).log"
 ARCHIVIST="$PROJECT_ROOT/.venv/bin/archivist"
+PYTHON="$PROJECT_ROOT/.venv/bin/python"
 
 mkdir -p "$LOG_DIR"
 cd "$PROJECT_ROOT"
 export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
 export PYTHONUNBUFFERED=1   # 实时刷日志:429/重试等 print 立即落盘,不被块缓冲伪装成卡死
 
-# Cover the previous ISO week
-WEEK_ARG="$(date -d "last week" +%G-W%V)"
+# Cover the previous ISO week. Use Python rather than GNU/BSD-specific date flags.
+WEEK_ARG="$("$PYTHON" -c 'from datetime import date, timedelta; d = date.today() - timedelta(days=7); y, w, _ = d.isocalendar(); print(f"{y}-W{w:02d}")')"
 
 {
     echo

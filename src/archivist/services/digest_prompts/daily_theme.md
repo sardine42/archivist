@@ -31,7 +31,7 @@
    - "Semantic ID 与 RQ-VAE 的可扩展性优化"
    - "LLM 推荐系统：从 finetune 到强化推理"
 
-3. **theme_tags**：从扁平 tag 白名单选 2-5 个最贴合的（白名单见 `config.yaml` 的 `tags:` 字段，与 score_papers 一致）：transformer, moe, diffusion, pretrained-lm, rl, contrastive-ssl, knowledge-distillation, process-supervision, parameter-scaling, recursive-depth, sparse-attention, test-time-training, semantic-id, feature-interaction, quantization, cold-start, search-ranking, ad-rec, industrial, academic
+3. **theme_tags**：从扁平 tag 白名单选 2-5 个最贴合的。**权威来源是 `config.yaml` 的 `tags:` 字段，务必以它为准**（下面这份副本仅供参考，可能落后于 config）：transformer, moe, diffusion, normalizing-flow, pretrained-lm, rl, contrastive-ssl, knowledge-distillation, process-supervision, parameter-scaling, recursive-depth, semantic-id, feature-interaction, feature-selection, multi-task, quantization, cold-start, search-ranking, ad-rec, industrial, academic, sparse-attention, linear-attention, test-time-training, test-time-scaling, training-stability, cross-domain, negative-feedback, graph, agent, inference-serving, sequence-compression
 
 4. **summary**（200-300 字中文）：三段式
    - 第一句：当日论文总览（数量 / 类别分布 / 工业-学术分布）

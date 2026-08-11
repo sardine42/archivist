@@ -43,8 +43,8 @@ arxiv:
     - "cs.AI"    # Artificial Intelligence
   max_results_per_category: 100
   top_k_deep_read: 6
-  # 同一天内并行精读的论文数(每篇是独立 claude -p /read-paper 子调用)。
-  # 跨天仍严格串行;此值只控制单日内的精读并发。1 = 退回串行。
+  # 会话外 CLI 流程中，同一天并行精读的论文数（每篇是独立 codex exec + $read-paper）。
+  # 会话内流程由主会话按可用 subagent 槽位调度；跨天仍严格串行。1 = CLI 流程串行。
   deep_read_concurrency: 4
   deep_read_threshold: 7  # Min score to enter deep reading (4-6 → brief archive only)
   # 推荐算法论文(generative-rec / discriminative-rec)仅在有工业界参与时才精读,
@@ -287,6 +287,8 @@ companies:
     keywords: [LUCID, thelucidproject, lucidtherapeutics]
   - name: Coupang
     keywords: [Coupang, coupang]
+  - name: Karrot
+    keywords: [Karrot, Danggeun, Danggeun Market]
   - name: Tubi
     keywords: [Tubi, tubi.tv, tubitv]
   - name: Kumo AI
@@ -305,6 +307,12 @@ companies:
     keywords: [Instacart]
   - name: Moonshot AI
     keywords: [Moonshot AI, Moonshot, 月之暗面, Kimi]
+  - name: IQuest Research
+    keywords: [IQuest Research, IQuest, iQuest]
+  - name: Twitch
+    keywords: [Twitch, Twitch Interactive]
+  - name: Cognizant
+    keywords: [Cognizant, Cognizant AI Lab]
 
 # Flat tag whitelist. Each tag must:
 #   1) Have a clear semantic boundary (no synonyms with other tags)
@@ -343,3 +351,5 @@ tags:
   - negative-feedback      # 隐式/显式负反馈建模 (skip / dislike / 混合极性行为序列)
   - graph                  # 图建模 (item-item 共参与图 / GNN / 超图 / 图聚类 / 图补全)
   - agent                  # LLM 智能体 / 多智能体框架 (agentic 推理-行动、R&D 自动化、架构演进 harness)
+  - inference-serving      # 推理/服务系统 (自定义 kernel、KV cache 布局、解码加速、流水线调度、约束解码 serving)
+  - sequence-compression   # 超长行为序列压缩 (token merge / 分层压缩 / 蒸馏到短序列)

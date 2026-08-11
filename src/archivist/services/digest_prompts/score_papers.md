@@ -61,8 +61,22 @@
    | `cold-start` | 冷启动场景 |
    | `search-ranking` | 搜索排序专题 |
    | `ad-rec` | 广告推荐 |
+   | `multi-task` | 多任务 / 多目标联合建模 (MMoE / PLE 家族) |
+   | `cross-domain` | 跨域 / 跨场景迁移 |
+   | `negative-feedback` | 负反馈 / 隐式负信号建模 |
+   | `graph` | 图结构建模 (GNN / 图检索) |
+   | `agent` | Agent / 工具调用 / 多智能体 |
+   | `feature-selection` | 特征筛选 / 剪枝 |
+   | `linear-attention` | 线性 / 次二次注意力 |
+   | `normalizing-flow` | 归一化流 |
+   | `test-time-scaling` | 推理期加算力 (≠ `test-time-training` 推理期更新权重) |
+   | `training-stability` | 训练稳定性 (loss spike / 初始化 / 归一化) |
+   | `inference-serving` | 线上推理与服务侧优化 (缓存 / kernel / 时延) |
+   | `sequence-compression` | 超长行为序列压缩 (token merge / 分层压缩 / 蒸馏到短序列) |
    | `industrial` | 来自有线上系统的公司 |
    | `academic` | 仅学术 / 无部署 |
+
+   **权威来源是 `config.yaml` 的 `tags:` 字段**。上表只是加了释义的副本，若两者不一致，以 `config.yaml` 为准：表里没有但 `config.yaml` 里有的 tag 同样可用，反之则不可用。
 
    **废弃 tag**（不要再用）：`ctr-prediction` / `sequential-rec` / `generative-retrieval` 已由 `category` 字段承载；`attention-mechanism` 与 `transformer` 重复；`scaling` 改名为 `parameter-scaling`；`llm-based` 改名为 `pretrained-lm`；`contrastive-learning` 改名为 `contrastive-ssl`。
 

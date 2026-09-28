@@ -160,6 +160,7 @@ def paper_show(slug: str):
 @click.option("--title", "-t", help="Set title")
 @click.option("--model-name", help="Set model name abbreviation")
 @click.option("--reading-score", type=float, help="Set reading score (1-10)")
+@click.option("--abstract", help="Set abstract. Note: deep-read papers normally have an EMPTY abstract — download-paper.py never writes one — so an empty value is the archive norm, not a failed fetch. Filling a single paper makes it an outlier.")
 @click.option("--published-date", help="Set published date (YYYY-MM-DD)")
 @click.option("--url", help="Set ArXiv URL")
 @click.option("--arxiv-id", help="Set arXiv ID (e.g. 1234.56789 or 1234.56789v1). Normally set by download-paper.py; use this only when that flow failed.")
@@ -170,7 +171,7 @@ def paper_edit(slug: str, tags: str | None, proposed_tags: str | None,
                status: str | None, rating: int | None,
                rating_reason: str | None, feedback_consumed: bool | None,
                category: str | None, title: str | None, model_name: str | None,
-               reading_score: float | None,
+               reading_score: float | None, abstract: str | None,
                published_date: str | None, url: str | None,
                arxiv_id: str | None, generated_by: str | None,
                reasoning_effort: str | None):
@@ -214,6 +215,8 @@ def paper_edit(slug: str, tags: str | None, proposed_tags: str | None,
             click.echo("Reading score must be 1-10", err=True)
             sys.exit(1)
         kwargs["reading_score"] = reading_score
+    if abstract is not None:
+        kwargs["abstract"] = abstract
     if published_date is not None:
         kwargs["published_date"] = published_date
     if url is not None:

@@ -313,6 +313,28 @@ companies:
     keywords: [Twitch, Twitch Interactive]
   - name: Cognizant
     keywords: [Cognizant, Cognizant AI Lab]
+  - name: PayPal
+    keywords: [PayPal, PayPal AI]
+  - name: Together AI
+    keywords: [Together AI, TogetherAI, together.ai]
+  - name: Kakao
+    keywords: [Kakao, Kakao Corp., KakaoBrain, Kakao Brain]
+  - name: DoorDash
+    keywords: [DoorDash, DoorDash Inc., DoorDash Inc]
+  - name: SK Telecom
+    keywords: [SK Telecom, SKTelecom, SKT]
+  - name: Intuit
+    keywords: [Intuit]
+  - name: VK
+    keywords: [AI VK, VKontakte, vkteam, VK Group]
+  - name: Hello Group
+    keywords: [Hello Group, HelloGroup, hellogroup, Momo]
+  - name: Q Labs
+    keywords: [Q Labs, QLabs, qlabs-eng]
+  - name: StepFun
+    keywords: [StepFun, 阶跃星辰]
+  - name: Shopify
+    keywords: [Shopify]
 
 # Flat tag whitelist. Each tag must:
 #   1) Have a clear semantic boundary (no synonyms with other tags)

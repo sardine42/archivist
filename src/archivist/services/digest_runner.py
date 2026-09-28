@@ -38,7 +38,7 @@ from archivist.services.arxiv_scorer import (
     archive_scored_paper,
     pre_filter,
 )
-from archivist.services.arxiv_fetch import fetch_papers
+from archivist.services.arxiv_fetch import OAI_LATE_LOOKBACK_DAYS, fetch_papers
 from archivist.services.codex_runner import CodexRunnerError, run_codex, run_codex_json
 from archivist.services.digest import (
     _coverage_range,
@@ -139,9 +139,43 @@ def _paper_deeply_read(arxiv_id: str) -> bool:
 # ── Step 1: fetch ─────────────────────────────────────────────────
 
 
+def _ids_in_earlier_candidates(digest_date: str | None) -> set[str]:
+    """Version-stripped arxiv_ids listed in candidate files of earlier digests.
+
+    A candidate file is the pipeline's record of what it has already put in
+    front of the scorer, including papers scored too low to archive, which
+    leave no trace anywhere else. The file for ``digest_date`` itself is
+    excluded so that re-running a date keeps its own late arrivals.
+    """
+    ids: set[str] = set()
+    if not PAPERS_DIR.exists():
+        return ids
+    for path in PAPERS_DIR.glob("_candidates_*.json"):
+        file_date = path.stem.removeprefix("_candidates_")
+        if digest_date and file_date >= digest_date:
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        for c in data.get("candidates", []):
+            ids.add(_strip_v(str(c.get("arxiv_id", ""))))
+    return ids
+
+
 @_step("Step 1 — fetch candidates")
-def _fetch_candidates(coverage_start: str, coverage_end: str) -> list[dict]:
+def _fetch_candidates(
+    coverage_start: str,
+    coverage_end: str,
+    digest_date: str | None = None,
+) -> list[dict]:
     """Fetch and pre-filter candidates for each day in the coverage range.
+
+    Also picks up late announcements: papers first submitted in the
+    OAI_LATE_LOOKBACK_DAYS before the range that only surfaced in this run's
+    announcement window. One is kept only if no earlier digest's candidate file
+    lists it and it is not already archived; a revision of an old paper
+    resurfaces the same way and must not re-enter as new.
 
     Returns a deduped flat list of candidate dicts (one entry per arxiv_id).
     Side-effect free aside from arxiv API calls.
@@ -151,12 +185,17 @@ def _fetch_candidates(coverage_start: str, coverage_end: str) -> list[dict]:
     cat_list = arxiv_cfg.get("categories", ["cs.IR", "cs.LG"])
     max_results = arxiv_cfg.get("max_results_per_category", 100)
 
+    late_since = (date_type.fromisoformat(coverage_start)
+                  - timedelta(days=OAI_LATE_LOOKBACK_DAYS)).isoformat()
+    seen_before = _ids_in_earlier_candidates(digest_date)
+
     seen: dict[str, dict] = {}  # clean_id → candidate dict + CandidatePaper
     candidate_objs = []  # parallel list of CandidatePaper
 
     for day in _iter_dates(coverage_start, coverage_end):
         log.info(f"  fetching {day}…")
-        raw = fetch_papers(cat_list, max_results=max_results, date=day)
+        raw = fetch_papers(cat_list, max_results=max_results, date=day,
+                           late_since=late_since)
         log.info(f"  {day}: {len(raw)} fetched")
         if not raw:
             continue
@@ -166,6 +205,12 @@ def _fetch_candidates(coverage_start: str, coverage_end: str) -> list[dict]:
             clean = _strip_v(c.paper.arxiv_id)
             if clean in seen:
                 continue
+            submitted = c.paper.published[:10]
+            if submitted < coverage_start:
+                if clean in seen_before or c.is_existing or c.is_update:
+                    continue
+                log.info(f"  late announcement: {c.paper.arxiv_id} "
+                         f"(submitted {submitted}) — {c.paper.title[:60]}")
             seen[clean] = {"candidate": c}
             candidate_objs.append(c)
 
@@ -424,7 +469,18 @@ def run_daily(date_str: str | None = None, force: bool = False) -> None:
     coverage_start, coverage_end = _coverage_range(date)
     log.info(f"  coverage range: {coverage_start} ~ {coverage_end}")
 
-    candidates = _fetch_candidates(coverage_start, coverage_end)
+    candidates = _fetch_candidates(coverage_start, coverage_end, digest_date=date)
+    # prepare_daily finds late announcements through this file (their
+    # published_date predates the coverage range), and later runs use it to
+    # tell which late papers they have already seen.
+    from archivist.services.arxiv_scorer import candidates_to_json
+    from archivist.utils import write_json
+    write_json(PAPERS_DIR / f"_candidates_{date}.json", {
+        "date": date,
+        "coverage": [coverage_start, coverage_end],
+        "total_candidates": len(candidates),
+        "candidates": candidates_to_json(candidates),
+    })
     score_results = _score_candidates(candidates)
     _deep_read_top_k(candidates, score_results)
 

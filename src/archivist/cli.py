@@ -881,7 +881,7 @@ def cmd_digest_fetch_candidates(date: str):
 
     ensure_archive_dirs()
     start, end = _coverage_range(date)
-    candidates = _fetch_candidates(start, end)
+    candidates = _fetch_candidates(start, end, digest_date=date)
     out_file = PAPERS_DIR / f"_candidates_{date}.json"
     write_json(out_file, {
         "date": date,

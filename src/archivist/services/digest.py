@@ -72,7 +72,10 @@ def prepare_daily(date: str) -> dict:
     - Tue: covers Sat+Sun+Mon (Mon ET 20:00 announcement of weekend batch)
     - Wed-Fri: covers previous day
 
-    Filter by published_date in the coverage range.
+    Filter by published_date in the coverage range, plus any paper listed in
+    this date's candidate file: a late announcement arrives with a
+    published_date before the range, and would otherwise be archived but
+    never shown in any digest.
     Cross-day deduplication: if the paper appeared in any earlier daily digest,
     skip it here.
 
@@ -90,6 +93,12 @@ def prepare_daily(date: str) -> dict:
             if existing.get("id", "") < date:
                 for cat, ids in existing.get("by_category", {}).items():
                     earlier_ids.update(aid.split("v")[0] for aid in ids)
+
+    fetched_ids = set()
+    candidates_file = PAPERS_DIR / f"_candidates_{date}.json"
+    if candidates_file.exists():
+        for c in read_json(candidates_file).get("candidates", []):
+            fetched_ids.add(str(c.get("arxiv_id", "")).split("v")[0])
 
     papers_by_arxiv: dict[str, dict] = {}
     by_category: dict[str, int] = {}
@@ -109,9 +118,10 @@ def prepare_daily(date: str) -> dict:
             except Exception:
                 continue
             pub = m.get("published_date", "")
-            if not pub or pub < range_start or pub > range_end:
-                continue
             arxiv_id = m.get("arxiv_id", "").split("v")[0]  # normalize: strip version suffix
+            in_range = bool(pub) and range_start <= pub <= range_end
+            if not in_range and arxiv_id not in fetched_ids:
+                continue
             if arxiv_id in earlier_ids:
                 continue
             # Skip if we already have a deep-read entry for this paper

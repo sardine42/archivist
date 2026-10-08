@@ -3,6 +3,7 @@
 import email.utils
 import fcntl
 import http.client
+import io
 import os
 import random
 import re
@@ -69,14 +70,69 @@ _ENV_OPENER = urllib.request.build_opener()  # honours http(s)_proxy + system pr
 _DIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
-def _openers() -> tuple:
+class _KeepAliveOpener:
+    """GET over http.client without urllib's forced ``Connection: close``.
+
+    urllib's AbstractHTTPHandler forces ``Connection: close``. Use http.client
+    so OAI requests can omit that header and avoid connection-dependent
+    truncation while retaining the existing retry and route fallback logic.
+
+    Same interface as an urllib opener (``open(req, timeout).read()``) and
+    raises the same exception types, so _read_rate_limited's route fallback and
+    _urlopen_with_retry's backoff treat it exactly like the openers it replaces.
+    """
+
+    def __init__(self, use_proxy: bool):
+        self.use_proxy = use_proxy
+
+    def _proxy(self) -> tuple[str, int] | None:
+        if not self.use_proxy:
+            return None
+        url = urllib.request.getproxies().get("https", "")
+        parts = urllib.parse.urlsplit(url)
+        if parts.scheme != "http" or not parts.hostname:
+            return None  # no (or a non-HTTP) proxy: behave as the direct route
+        return parts.hostname, parts.port or 80
+
+    def open(self, req, timeout=60):
+        url = urllib.parse.urlsplit(req.full_url)
+        path = url.path + (f"?{url.query}" if url.query else "")
+        proxy = self._proxy()
+        if proxy:
+            conn = http.client.HTTPSConnection(*proxy, timeout=timeout)
+            conn.set_tunnel(url.hostname, url.port or 443)
+        else:
+            conn = http.client.HTTPSConnection(url.hostname, url.port or 443,
+                                               timeout=timeout)
+        try:
+            conn.request("GET", path, headers=dict(req.header_items()))
+            resp = conn.getresponse()
+            body = resp.read()
+            if resp.status != 200:
+                raise urllib.error.HTTPError(req.full_url, resp.status, resp.reason,
+                                             resp.headers, io.BytesIO(body))
+            return io.BytesIO(body)
+        finally:
+            conn.close()
+
+
+_KEEPALIVE_ENV_OPENER = _KeepAliveOpener(use_proxy=True)
+_KEEPALIVE_DIRECT_OPENER = _KeepAliveOpener(use_proxy=False)
+
+
+def _openers(req=None) -> tuple:
     """Openers to try in order for one request."""
+    if req is not None and urllib.parse.urlsplit(req.full_url).hostname == \
+            urllib.parse.urlsplit(OAI_API).hostname:
+        env_opener, direct_opener = _KEEPALIVE_ENV_OPENER, _KEEPALIVE_DIRECT_OPENER
+    else:
+        env_opener, direct_opener = _ENV_OPENER, _DIRECT_OPENER
     route = (os.environ.get("ARCHIVIST_ARXIV_ROUTE") or "").strip().lower()
     if route == "direct":
-        return (_DIRECT_OPENER,)
+        return (direct_opener,)
     if route == "proxy":
-        return (_ENV_OPENER,)
-    return (_ENV_OPENER, _DIRECT_OPENER)
+        return (env_opener,)
+    return (env_opener, direct_opener)
 
 
 def _retry_after_seconds(error: urllib.error.HTTPError) -> float | None:
@@ -141,7 +197,7 @@ def _read_rate_limited(req, timeout: int) -> bytes:
                 lock_file,
                 time.time() + ARXIV_REQUEST_INTERVAL,
             )
-            candidates = _openers()
+            candidates = _openers(req)
             for index, opener in enumerate(candidates):
                 try:
                     return opener.open(req, timeout=timeout).read()

@@ -2,12 +2,13 @@
 
 These mirror the pages produced by ``archivist build`` so ``archivist web``
 serves the full site, not just the reading section. The graph/benchmark pages
-fetch their payload from sibling ``data.json`` endpoints, and the shared model
-search index (used by the reading / graph / benchmark tabs) is served at
-``/search/model-index.json``.
+fetch their payload from sibling ``data.json`` endpoints, and their shared
+model index is served at ``/search/model-index.json``. Paper full-text search
+uses the same Pagefind bundle as the static site at ``/search/pagefind/``.
 """
 
 import json
+import mimetypes
 
 from flask import Blueprint, Response, abort, render_template, send_file
 
@@ -51,11 +52,25 @@ def benchmark_data():
     return _json(prepare_benchmark_data())
 
 
-# ── Shared model search index (reading / graph / benchmark tabs) ──
+# ── Shared model index and paper full-text search ──────────────
 
 @site_bp.route("/search/model-index.json")
 def model_index():
     return _json(prepare_model_index())
+
+
+@site_bp.route("/search/pagefind/<path:filename>")
+def paper_search_asset(filename: str):
+    """Serve the same static paper index in the local preview server."""
+    from archivist.web.search import preview_search_asset
+
+    content = preview_search_asset(filename)
+    if content is None:
+        abort(404)
+    mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    response = Response(content, mimetype=mimetype)
+    response.cache_control.no_cache = True
+    return response
 
 
 # ── Internal docs ────────────────────────────────────────────

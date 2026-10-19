@@ -134,6 +134,7 @@ def build_site(output_dir: Path) -> None:
 
     detail_template = env.get_template("reading/detail.html")
     rendered = 0
+    search_content = {}
     for item in enriched:
         p = item["meta"]
         paper_dir = get_paper_dir(p.slug)
@@ -147,6 +148,7 @@ def build_site(output_dir: Path) -> None:
         html_content = _render_markdown(md_text)
         toc_html = getattr(_render_markdown, "_last_toc", "")
         html_content = _resolve_wiki_links(html_content, by_arxiv, by_slug)
+        search_content[p.slug] = html_content
 
         related = _get_related_papers(p, enriched, index=related_index)
 
@@ -176,6 +178,16 @@ def build_site(output_dir: Path) -> None:
                 shutil.rmtree(dst_figs)
             shutil.copytree(src_figs, dst_figs)
         rendered += 1
+
+    # Index the same published reading corpus, excluding private metadata and
+    # other site sections. Reuse rendered reports to avoid parsing them twice.
+    from archivist.web.search import build_paper_search
+    search_count = build_paper_search(
+        search_dir / "pagefind",
+        (item["meta"] for item in enriched),
+        rendered_content=search_content,
+    )
+    click.echo(f"Built full-text search: {search_count} papers → search/pagefind/")
 
     # Render digest detail pages
     click.echo("Rendering digest detail pages...")

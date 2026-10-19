@@ -57,26 +57,15 @@ a:hover { text-decoration: underline; }
 .search-input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; min-width: 160px; background: white; font-family: inherit; }
 .search-input:focus { outline: none; border-color: #1976D2; box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.15); }
 
-/* Reading tab: role badges for model search results */
-.paper-card[data-search-role]::before {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    margin-bottom: 8px;
-}
-.paper-card[data-search-role="proposer"]::before {
-    content: "★ 提出该模型";
-    background: #ffa000;
-    color: white;
-    font-weight: 600;
-}
-.paper-card[data-search-role="referrer"]::before {
-    content: "🔗 引用该模型";
-    background: #e8eaf6;
-    color: #3949ab;
-    font-weight: 500;
-}
+.paper-search-feedback { font-size: 13px; color: #666; margin: -8px 0 16px; line-height: 1.6; }
+.paper-search-feedback:has(#paperSearchStatus:empty) { display: none; }
+#paperSearchRetry { margin-left: 8px; border: 0; background: none; color: #1976D2; cursor: pointer; font: inherit; text-decoration: underline; }
+#paperSearch { width: 280px; max-width: 100%; }
+.search-match-label { display: inline-block; padding: 2px 8px; margin-bottom: 8px; border-radius: 4px; font-size: 11px; color: #666; background: #f0f0f5; }
+.paper-card[data-search-match="heading"] .search-match-label { color: #1565c0; background: #e3f2fd; }
+.card-search-snippet { font-size: 13px; color: #555; line-height: 1.65; margin: 8px 0; padding-left: 10px; border-left: 2px solid #ddd; overflow-wrap: anywhere; }
+.card-search-snippet mark { background: #fff1a8; color: #333; border-radius: 2px; }
+.search-match-label[hidden], .card-search-snippet[hidden] { display: none; }
 .dropdown-multi { position: relative; display: inline-block; }
 .dropdown-btn { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; cursor: pointer; background: white; min-width: 100px; white-space: nowrap; }
 .dropdown-btn:hover { border-color: #999; }
@@ -275,6 +264,7 @@ a:hover { text-decoration: underline; }
     .dropdown-menu { position: absolute; left: 0; right: 0; min-width: 0; max-height: 60vh; }
     .sort-select { width: 100%; padding: 10px; font-size: 14px; }
     .search-input { width: 100%; min-width: 0; padding: 10px 12px; font-size: 14px; }
+    #paperSearch { width: 100%; }
     .filter-confirm-btn { width: 100%; padding: 12px; font-size: 15px; margin-left: 0; }
 
     /* — Paper cards — */

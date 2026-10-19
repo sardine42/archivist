@@ -10,6 +10,7 @@ from archivist.config import PAPERS_DIR, BENCHMARKS_DIR, DOCS_DIR
 from archivist.services.dag import load_graph, get_datasets
 from archivist.services.benchmark import list_datasets, get_leaderboard, is_standard_metric
 from archivist.services.digest import get_daily_statistics, load_digests, load_digest
+from archivist.web.graph_explorer import prepare_graph_explorer
 
 _company_rules_cache = None
 
@@ -208,6 +209,9 @@ def prepare_graph_data(dataset: str | None = None) -> dict:
         "pid_to_model": pid_to_model,
         "reading_urls": reading_urls,
         "last_updated": graph.last_updated[:10],
+        "explorer": prepare_graph_explorer(
+            graph.to_dict(), paper_meta_cache, reading_urls, normalize_company,
+        ),
     }
 
 

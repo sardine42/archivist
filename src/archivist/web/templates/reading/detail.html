@@ -128,7 +128,7 @@
             </section>
             {% endif %}
             {% if paper.model_name %}
-            <a class="rd-related-graph" href="/graph?focus={{ paper.model_name | urlencode }}">{{ paper.model_name }} 模型关系 ↗</a>
+            <a class="rd-related-graph" href="/graph/?focus={{ (('paper:' ~ paper.arxiv_id) if paper.arxiv_id else paper.model_name) | urlencode }}">{{ paper.model_name }} 模型关系 ↗</a>
             {% endif %}
             {% if appears_in %}
             <section class="rd-refs-section rd-reports">

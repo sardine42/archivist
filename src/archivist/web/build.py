@@ -53,6 +53,11 @@ def build_site(output_dir: Path) -> None:
         "reading_list_css_version": "reading-list.css",
         "reading_detail_css_version": "reading-detail.css",
         "reading_detail_js_version": "reading-detail.js",
+        "graph_model_js_version": "graph-model.js",
+        "graph_map_js_version": "graph-map.js",
+        "graph_map_css_version": "graph-map.css",
+        "graph_explorer_js_version": "graph-explorer.js",
+        "graph_explorer_css_version": "graph-explorer.css",
     }.items():
         env.globals[key] = static_asset_version(filename)
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import yaml
 
@@ -113,10 +113,18 @@ def get_site_base_url() -> str:
     return (load_config().get("site", {}) or {}).get("base_url", "")
 
 
-def get_deploy_settings() -> dict[str, str]:
+class DeploySettings(TypedDict):
+    host: str
+    extra_hosts: list[str]
+    remote_site_path: str
+    remote_archive_path: str
+
+
+def get_deploy_settings() -> DeploySettings:
     cfg = load_config().get("deploy", {}) or {}
     return {
         "host": cfg.get("host", ""),
+        "extra_hosts": cfg.get("extra_hosts", []),
         "remote_site_path": cfg.get("remote_site_path", "~/site"),
         "remote_archive_path": cfg.get("remote_archive_path", "~/archive"),
     }

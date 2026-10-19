@@ -1087,10 +1087,10 @@ def build_site(output: str):
 @cli.command("deploy")
 @click.option("--output", "-o", default="_site", type=click.Path())
 @click.option("--host", default=None,
-              help="Override deploy.host from config.yaml. Format user@host.")
+              help="Deploy only to this host, overriding deploy.host and deploy.extra_hosts. Format user@host.")
 @click.option("--skip-build", is_flag=True, help="Skip the build step and only rsync.")
 def deploy_site(output: str, host: str | None, skip_build: bool):
-    """Build the site and rsync it (plus paper figures) to the configured host."""
+    """Build once and rsync the site and paper figures to all configured hosts."""
     import subprocess
     from archivist.config import PAPERS_DIR
 
@@ -1098,8 +1098,15 @@ def deploy_site(output: str, host: str | None, skip_build: bool):
     target_host = host or settings["host"]
     if not target_host:
         raise click.ClickException(
-            "no deploy host configured (set deploy.host in config.yaml or pass --host)"
+            "no deploy host configured (set deploy.host in config.local.yaml or pass --host)"
         )
+    extra_hosts = [] if host else settings["extra_hosts"]
+    if not isinstance(extra_hosts, list):
+        raise click.ClickException("deploy.extra_hosts must be a list of SSH targets")
+    target_hosts = [target_host, *extra_hosts]
+    if any(not isinstance(target, str) or not target.strip() for target in target_hosts):
+        raise click.ClickException("deploy hosts must be non-empty SSH targets (user@host)")
+    target_hosts = list(dict.fromkeys(target.strip() for target in target_hosts))
     site_path = settings["remote_site_path"]
     archive_path = settings["remote_archive_path"]
     remote_papers_path = f"{archive_path}/papers"
@@ -1109,28 +1116,30 @@ def deploy_site(output: str, host: str | None, skip_build: bool):
         from archivist.web.build import build_site
         build_site(output_path)
 
-    # 1) Static site
-    click.echo(f"→ rsync {output_path}/ to {target_host}:{site_path}/")
-    subprocess.run(
-        ["rsync", "-avz", "--delete", f"{output_path}/", f"{target_host}:{site_path}/"],
-        check=True,
-    )
+    for target_host in target_hosts:
+        try:
+            # 1) Static site
+            click.echo(f"→ rsync {output_path}/ to {target_host}:{site_path}/")
+            subprocess.run(
+                ["rsync", "-avz", "--delete", f"{output_path}/", f"{target_host}:{site_path}/"],
+                check=True,
+            )
 
-    # 2) Paper figures + reading.md + meta.json. nginx aliases
-    #    /reading/<year>/<slug>/figures/ → <archive_path>/papers/<year>/<slug>/figures/
-    #    on the server, so figures must live in the server-side archive tree
-    #    in addition to the static site.
-    click.echo(f"→ rsync {PAPERS_DIR}/ to {target_host}:{remote_papers_path}/ (figures + meta)")
-    subprocess.run([
-        "rsync", "-avz",
-        "--include=*/",
-        "--include=figures/***",
-        "--include=meta.json",
-        "--include=reading.md",
-        "--exclude=*",
-        f"{str(PAPERS_DIR)}/",
-        f"{target_host}:{remote_papers_path}/",
-    ], check=True)
+            # 2) Figures + reading.md + meta.json in the server-side archive
+            #    tree used by nginx aliases. PDFs stay on ArXiv.
+            click.echo(f"→ rsync {PAPERS_DIR}/ to {target_host}:{remote_papers_path}/ (figures + meta)")
+            subprocess.run([
+                "rsync", "-avz",
+                "--include=*/",
+                "--include=figures/***",
+                "--include=meta.json",
+                "--include=reading.md",
+                "--exclude=*",
+                f"{str(PAPERS_DIR)}/",
+                f"{target_host}:{remote_papers_path}/",
+            ], check=True)
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise click.ClickException(f"deployment to {target_host} failed: {exc}") from exc
     click.echo("Deploy complete.")
 
 

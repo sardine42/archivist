@@ -1125,7 +1125,6 @@ def deploy_site(output: str, host: str | None, skip_build: bool):
         "rsync", "-avz",
         "--include=*/",
         "--include=figures/***",
-        "--include=document.pdf",
         "--include=meta.json",
         "--include=reading.md",
         "--exclude=*",

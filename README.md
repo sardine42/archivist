@@ -51,6 +51,8 @@ $EDITOR config.local.yaml        # 按需填入；留空等于禁用对应功能
 
 `archivist deploy` 做两件事：本地 `archivist build` → `_site/`，然后 rsync `_site/` 和 `archive/papers/` 到远程 host。
 
+网站的 PDF 链接直接指向 ArXiv；部署只同步论文图表、元数据和精读报告，不上传 PDF。已有服务器应移除原先指向 `document.pdf` 的 nginx alias，并清理 CDN 中旧 PDF 地址的缓存。
+
 #### A.1 远程服务器准备
 
 一台带公网 IP 的 Linux 机器，安装 nginx：
@@ -73,6 +75,12 @@ server {
     server_name example.com;       # 换成你的域名或 _
     root /path/to/site;
     index index.html;
+
+    # 关闭旧 PDF 下载入口；页面上的下载链接直接指向 ArXiv
+    location ~ ^/reading/\d+/[^/]+/pdf/?$ {
+        add_header Cache-Control "no-store" always;
+        return 410;
+    }
 
     # 把论文 figures 从 archive 目录 alias 出来
     location ~ ^/reading/(\d+)/([^/]+)/figures/(.*)$ {

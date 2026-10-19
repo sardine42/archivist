@@ -38,9 +38,10 @@ a:hover { text-decoration: underline; }
 .digest-list { display: flex; flex-direction: column; gap: 10px; }
 .digest-card { display: block; padding: 16px 20px; background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); text-decoration: none; color: #333; transition: box-shadow 0.15s; }
 .digest-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.12); text-decoration: none; }
-.digest-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
+.digest-card-header { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
 .digest-date { font-weight: 600; color: #1976D2; }
-.digest-stats { color: #888; }
+.digest-period { display: inline-block; white-space: nowrap; }
+.digest-stats { color: #888; white-space: nowrap; }
 .digest-theme { font-size: 15px; font-weight: 500; margin-bottom: 6px; color: #333; }
 .digest-summary { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 8px; }
 .digest-tags { display: flex; gap: 4px; flex-wrap: wrap; }

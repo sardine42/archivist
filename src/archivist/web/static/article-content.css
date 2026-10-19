@@ -58,7 +58,10 @@
 .article-content .anchor-link:hover { color: var(--content-accent); }
 .article-content .wiki-link { color: var(--content-accent); border-bottom-color: var(--content-accent); }
 .article-content .katex-display { overflow-x: auto; overflow-y: hidden; padding: 8px 0; margin: 22px 0; max-width: 100%; }
-.article-content .katex { overflow-wrap: normal; }
+.article-content .katex { overflow-wrap: normal; position: relative; }
+/* Keep wide inline formulas scrollable without shifting the text baseline. */
+.article-content .content-math-scroll { display: inline-flex; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: baseline; }
+.article-content .content-math-scroll > .katex-html { flex: none; }
 .article-content .content-table-scroll { width: 100%; max-width: 100%; overflow-x: auto; margin: 22px 0; }
 .article-content :focus-visible { outline: 2px solid var(--content-accent); outline-offset: 3px; }
 .article-content table {

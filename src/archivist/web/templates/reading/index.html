@@ -77,7 +77,7 @@
         {% for d in weekly %}
         <a href="/reading/digest/weekly/{{ d.id }}/" class="digest-card">
             <div class="digest-card-header">
-                <span class="digest-date">📅 {{ d.id }} ({{ d.period_start }} ~ {{ d.period_end }})</span>
+                <span class="digest-date">📅 {{ d.id }} <span class="digest-period">({{ d.period_start }} ~ {{ d.period_end }})</span></span>
                 <span class="digest-stats">{{ d.paper_count }} 篇</span>
             </div>
             {% if d.theme %}<div class="digest-theme">{{ d.theme }}</div>{% endif %}

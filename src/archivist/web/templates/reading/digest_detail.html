@@ -2,7 +2,7 @@
 {% block title %}{{ meta.title }} — Archivist{% endblock %}
 
 {% block content %}
-<div class="detail-page">
+<div class="detail-page digest-detail">
     <a href="/reading/?type=digests" class="back-link">← 返回报告列表</a>
 
     <!-- Metadata card -->
@@ -39,7 +39,68 @@
     </article>
 </div>
 
+<script>
+(function () {
+    document.querySelectorAll('.digest-detail .reading-content table').forEach(function (table) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'digest-table-scroll';
+        wrapper.tabIndex = 0;
+        wrapper.setAttribute('role', 'region');
+        wrapper.setAttribute('aria-label', '数据表格，可横向滚动');
+        table.replaceWith(wrapper);
+        wrapper.append(table);
+    });
+}());
+</script>
+
 <style>
+/* Match the paper reader while keeping report styles isolated. */
+.digest-detail .reading-content blockquote {
+    margin: 22px 0;
+    padding: 3px 0 3px 18px;
+    border-left: 2px solid var(--accent);
+    background: none;
+    color: #38414e;
+    overflow-wrap: anywhere;
+}
+.digest-detail blockquote > :first-child { margin-top: 0; }
+.digest-detail blockquote > :last-child { margin-bottom: 0; }
+.digest-table-scroll { width: 100%; overflow-x: auto; margin: 22px 0; }
+.digest-table-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.digest-detail .reading-content table {
+    display: table;
+    width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+    font-size: 13px;
+    line-height: 1.8;
+    white-space: normal;
+}
+.digest-detail table:has(tr > :nth-child(6)) { min-width: 680px; }
+.digest-detail .reading-content th {
+    background: none;
+    color: var(--muted);
+    text-align: left;
+    font-weight: 500;
+    padding: 10px 9px;
+    border: 0;
+    border-block: 1px solid var(--line);
+    white-space: nowrap;
+}
+.digest-detail .reading-content td {
+    padding: 12px 9px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+}
+.digest-detail .reading-content tr:hover td { background: var(--soft); }
+.digest-detail .reading-content td a { overflow-wrap: anywhere; }
+@media (max-width: 650px) {
+    .digest-detail .reading-content { padding: 20px 16px; }
+    .digest-detail .reading-content blockquote { padding-left: 14px; }
+    .digest-detail .reading-content th, .digest-detail .reading-content td { padding-inline: 8px; font-size: 12px; }
+}
+
 .tag-daily { background: #e3f2fd; color: #1976D2; }
 .tag-weekly { background: #fff3e0; color: #E65100; }
 .tag-monthly { background: #f3e5f5; color: #7B1FA2; }

@@ -105,6 +105,12 @@ a:hover { text-decoration: underline; }
 .card-date { font-size: 12px; color: #999; white-space: nowrap; }
 
 /* ── Tags ── */
+.category-badges { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; max-width: 100%; }
+.category-badge { --category-ink: #6d7481; --category-fill: #f1f4f9; display: inline-flex; align-items: center; padding: 0 6px; border: 0; border-radius: 4px; font-size: 11px; font-weight: 500; line-height: 20px; color: var(--category-ink); background: var(--category-fill); white-space: nowrap; }
+.category-generative-rec { --category-ink: #3165a1; --category-fill: #eaf0f6; }
+.category-discriminative-rec { --category-ink: #95521e; --category-fill: #f4eee9; }
+.category-llm { --category-ink: #7851a3; --category-fill: #f2eef6; }
+.category-other { --category-ink: #246e65; --category-fill: #e9f1f0; }
 .tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 500; }
 .tag-generative-rec { background: #e3f2fd; color: #1976D2; }
 .tag-discriminative-rec { background: #FFF3E0; color: #E65100; }

@@ -103,7 +103,13 @@ function updateLabel(id) {
     if (checked.length === inputs.length) label = '全部';
     else if (!checked.length) label = '无';
     else if (checked.length === 1) label = checked[0].dataset.label || checked[0].value;
-    document.querySelector(`#${id} .dropdown-btn`).textContent = label + ' ▾';
+    const button = document.querySelector(`#${id} .dropdown-btn`);
+    if (id === 'categoryFilter' && checked.length === 1 && checked.length !== inputs.length) {
+        const badge = checked[0].parentElement.querySelector('.category-badge').cloneNode(true);
+        button.replaceChildren(badge, document.createTextNode(' ▾'));
+    } else {
+        button.textContent = label + ' ▾';
+    }
 }
 
 const snippetObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {

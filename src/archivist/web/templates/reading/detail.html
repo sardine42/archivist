@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_category.html' import category_badge %}
 {% block title %}{{ paper.model_name or paper.title }} — Archivist{% endblock %}
 
 {% block head_extra %}
@@ -45,9 +46,7 @@
         <div class="rd-meta">
             {% if paper.model_name %}<span class="rd-model">{{ paper.model_name }}</span>{% endif %}
             <span>{{ company or "学术" }}</span>
-            {% for c in paper.category %}
-            <span>{{ "生成式" if c == "generative-rec" else "判别式" if c == "discriminative-rec" else "LLM" if c == "llm" else c }}</span>
-            {% endfor %}
+            {% if paper.category %}<span class="category-badges">{% for c in paper.category %}{{ category_badge(c) }}{% endfor %}</span>{% endif %}
             {% if paper.published_date %}<time datetime="{{ paper.published_date }}" class="rd-date">{{ paper.published_date }}</time>{% endif %}
             <div class="rd-scores" aria-label="论文评分">
                 <span>精读<b>{{ "%.0f" | format(paper.reading_score) if paper.reading_score else "—" }}</b></span>

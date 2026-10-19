@@ -26,6 +26,7 @@
 .reading-list .filter-label { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .reading-list .dropdown-btn, .reading-list .sort-select { min-width: 0; max-width: 150px; min-height: 34px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink); background: white; font-size: 12px; cursor: pointer; }
 .reading-list .dropdown-btn { max-width: 98px; overflow: hidden; text-overflow: ellipsis; }
+.reading-list #categoryFilter .dropdown-btn { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .reading-list .dropdown-menu { border-color: var(--line); box-shadow: 0 8px 20px #20273312; border-radius: 6px; max-width: min(310px, 85vw); }
 .reading-list .dropdown-item { white-space: normal; overflow-wrap: anywhere; padding: 8px 12px; color: var(--ink); font-size: 12px; }
 .reading-list .dropdown-item:hover { background: var(--soft); }

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_category.html' import category_badge, category_labels %}
 {% block title %}Paper Reading — Archivist{% endblock %}
 
 {% block head_extra %}
@@ -21,7 +22,7 @@
             {% if stats.industry %}<span>工业界 {{ stats.industry }}</span>{% endif %}
             {% for cat in ['generative-rec', 'discriminative-rec', 'llm', 'other'] if stats.by_category.get(cat) %}
             {% set count = stats.by_category[cat] %}
-            <span>{{ '生成式' if cat == 'generative-rec' else '判别式' if cat == 'discriminative-rec' else cat }} {{ count }}</span>
+            <span>{{ category_labels.get(cat, cat) }} {{ count }}</span>
             {% endfor %}
         </div>
         {% endif %}
@@ -130,8 +131,8 @@
                             <button type="button" onclick="clearAll('{{ filter_id }}')">清空</button>
                         </div>
                         {% for value in options %}
-                        {% set label = '生成式' if value == 'generative-rec' else '判别式' if value == 'discriminative-rec' else 'LLM' if value == 'llm' else value %}
-                        <label class="dropdown-item"><input type="checkbox" checked value="{{ value }}" data-label="{{ label }}">{{ label }}</label>
+                        {% set label = category_labels.get(value, value) if filter_id == 'categoryFilter' else value %}
+                        <label class="dropdown-item"><input type="checkbox" checked value="{{ value }}" data-label="{{ label }}">{% if filter_id == 'categoryFilter' %}{{ category_badge(value) }}{% else %}{{ label }}{% endif %}</label>
                         {% endfor %}
                         {% if filter_id == 'companyFilter' %}
                         <label class="dropdown-item"><input type="checkbox" checked value="" data-label="学术">学术</label>
@@ -170,7 +171,7 @@
                 <div class="card-facts">
                     {% if p.model_name %}<a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-model">{{ p.model_name }}</a>{% endif %}
                     <span>{{ item.company or '学术' }}</span>
-                    {% for c in p.category %}<span>{{ '生成式' if c == 'generative-rec' else '判别式' if c == 'discriminative-rec' else 'LLM' if c == 'llm' else c }}</span>{% endfor %}
+                    {% if p.category %}<span class="category-badges">{% for c in p.category %}{{ category_badge(c) }}{% endfor %}</span>{% endif %}
                     {% if p.published_date %}<time datetime="{{ p.published_date }}">{{ p.published_date }}</time>{% endif %}
                 </div>
                 <div class="card-scores">

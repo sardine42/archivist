@@ -1,0 +1,4 @@
+{% set category_labels = {'generative-rec': '生成式', 'discriminative-rec': '判别式', 'llm': 'LLM', 'other': '其他'} %}
+{% macro category_badge(category) -%}
+<span class="category-badge category-{{ category if category in category_labels else 'unknown' }}" data-category="{{ category }}">{{ category_labels.get(category, category) }}</span>
+{%- endmacro %}

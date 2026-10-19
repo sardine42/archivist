@@ -42,6 +42,7 @@ def create_app(mode: str = "dev") -> Flask:
             "reading_list_css_version": static_asset_version("reading-list.css"),
             "reading_detail_css_version": static_asset_version("reading-detail.css"),
             "reading_detail_js_version": static_asset_version("reading-detail.js"),
+            "graph_layout_js_version": static_asset_version("graph-layout.js"),
             "graph_model_js_version": static_asset_version("graph-model.js"),
             "graph_map_js_version": static_asset_version("graph-map.js"),
             "graph_map_css_version": static_asset_version("graph-map.css"),

@@ -5,13 +5,14 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='graph-explorer.css') }}?v={{ graph_explorer_css_version }}">
 <script defer src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
 <script defer src="{{ url_for('static', filename='graph-model.js') }}?v={{ graph_model_js_version }}"></script>
+<script defer src="{{ url_for('static', filename='graph-layout.js') }}?v={{ graph_layout_js_version }}"></script>
 <script defer src="{{ url_for('static', filename='graph-map.js') }}?v={{ graph_map_js_version }}"></script>
 <script defer src="{{ url_for('static', filename='graph-explorer.js') }}?v={{ graph_explorer_js_version }}"></script>
 {% endblock %}
 {% block content %}
 <div class="gx-explorer" id="graphExplorer" aria-label="模型图谱">
     <div class="gx-heading">
-        <div><h1>模型图谱</h1><p>沿时间向右，找到研究前沿。</p></div>
+        <div><h1>模型图谱</h1></div>
         <span id="graphCount" class="gx-count" aria-live="polite">正在加载论文…</span>
     </div>
     <div class="gx-toolbar">
@@ -30,7 +31,7 @@
         <label class="gx-category-label"><span class="gx-sr-only">高亮论文类型</span><select id="graphCategory" aria-label="高亮论文类型"><option value="">全部类型</option><option value="generative-rec">生成式</option><option value="discriminative-rec">判别式</option><option value="llm">LLM</option><option value="other">其他</option></select></label>
         <button class="gx-clear" id="graphClear" type="button" hidden>清除高亮</button>
     </div>
-    <div class="gx-canvas-top"><span>较早研究 <span aria-hidden="true">—→</span> 最新发表</span><span id="graphContext"></span></div>
+    <div class="gx-canvas-top"><span>发表时间 <span aria-hidden="true">→</span></span><span id="graphContext"></span></div>
     <div class="gx-workspace">
         <section class="gx-canvas-panel" aria-label="按发表时间排列的模型大图">
             <div id="graphCanvas" class="gx-canvas" role="region" aria-label="模型节点图，可拖动和缩放。也可用搜索或右侧论文列表定位。"></div>
@@ -40,14 +41,14 @@
                 <span id="graphZoom" aria-live="off">85%</span>
                 <button id="graphZoomOut" type="button" aria-label="缩小图谱">−</button>
             </div>
-            <div class="gx-map-hint">拖动平移 · 滚轮或双指缩放</div>
+            <div class="gx-map-hint">横向拖动 · 缩放时间范围</div>
         </section>
         <aside class="gx-inspector" id="graphInspector" aria-label="论文与相关研究" tabindex="-1">
             <div class="gx-inspector-top"><span id="graphPanelLabel">最新发表</span><button id="graphPanelClose" type="button" aria-label="关闭论文详情" hidden>×</button></div>
             <div id="graphPanelBody" class="gx-panel-body"></div>
         </aside>
     </div>
-    <div class="gx-footer"><div class="gx-legend"><span><i class="gx-line-solid"></i>实验比较</span><span><i class="gx-line-dashed"></i>引用</span><span><i class="gx-legend-star">★</i>近 90 天精读 ≥ 8</span></div><span>点击论文显示关联线；最右侧表示发表时间较新。</span></div>
+    <div class="gx-footer"><div class="gx-legend"><span><i class="gx-line-solid"></i>实验比较</span><span><i class="gx-line-dashed"></i>引用</span><span><i class="gx-type-dot gx-type-generative"></i>生成式</span><span><i class="gx-type-dot gx-type-discriminative"></i>判别式</span><span><i class="gx-type-dot gx-type-llm"></i>LLM</span><span><i class="gx-type-dot gx-type-other"></i>其他</span></div><span>点击节点查看关联 · 最右侧为最新发表</span></div>
     <noscript><p>请启用 JavaScript 查看交互图谱，也可前往 <a href="/reading/">论文列表</a>。</p></noscript>
 </div>
 {% endblock %}

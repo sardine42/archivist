@@ -13,7 +13,6 @@
     const categoryNames = {'generative-rec': '生成式', 'discriminative-rec': '判别式', llm: 'LLM', other: '其他'};
     let model, map, payload, selected = null, activeLineage = '', searchMatches = [], searchIndex = -1;
     let highlighted = null, expanded = false;
-    const recentIds = new Set();
 
     function el(tag, className, value) {
         const item = document.createElement(tag);
@@ -45,7 +44,6 @@
         const row = button('', 'gx-node-row', function () { select(node.id); });
         const top = el('span', 'gx-row-top');
         const name = el('span', 'gx-row-title', label(node));
-        if (recentIds.has(node.id)) name.prepend(el('span', 'gx-row-marker', '★'));
         top.append(name, el('time', 'gx-row-date', date(node)));
         row.append(top);
         row.append(el('span', 'gx-row-description', node.title === label(node) ? (node.summary || '') : node.title));
@@ -85,7 +83,9 @@
             item.setAttribute('aria-pressed', item.dataset.lineage === activeLineage ? 'true' : 'false');
         });
         const group = model.lineages.find(function (item) { return item.id === activeLineage; });
-        byId('graphContext').textContent = highlighted ? ((group ? group.label : '') + (category.value ? ' · ' + categoryNames[category.value] : '')).replace(/^ · /, '') + ' · ' + nodes.length + ' 篇' : model.readNodes.length + ' 篇精读';
+        const paperCount = nodes.filter(function (node) { return node.has_reading; }).length;
+        const referenceCount = nodes.length - paperCount;
+        byId('graphContext').textContent = highlighted ? ((group ? group.label : '') + (category.value ? ' · ' + categoryNames[category.value] : '')).replace(/^ · /, '') + ' · ' + paperCount + ' 篇论文' + (referenceCount ? ' · ' + referenceCount + ' 个引用模型' : '') : '';
     }
     function showBrowse() {
         selected = null;
@@ -94,10 +94,9 @@
         panel.replaceChildren();
         const group = activeLineage ? model.lineage(activeLineage, {category: category.value}) : null;
         let nodes = group ? group.members : model.readNodes.filter(function (node) { return !category.value || node.category.includes(category.value); });
-        nodes = allNewest(nodes);
+        const references = group ? nodes.filter(function (node) { return !node.has_reading; }) : [];
+        nodes = allNewest(nodes.filter(function (node) { return node.has_reading; }));
         setPanelLabel(group ? group.definition.label + ' · ' + nodes.length + ' 篇' : '最新发表', !!group || !!category.value);
-        if (group) panel.append(el('p', 'gx-panel-intro', group.definition.description));
-        else panel.append(el('p', 'gx-panel-intro', '图中横向位置按发表时间排列。点击论文定位，并查看它的相关研究。'));
         const list = el('div', 'gx-node-list');
         const maximum = group ? nodes.length : 16;
         nodes.slice(0, maximum).forEach(function (node) { list.append(nodeRow(node)); });
@@ -107,6 +106,11 @@
             const related = section('系列扩展');
             group.related.forEach(function (node) { related.append(nodeRow(node)); });
             panel.append(related);
+        }
+        if (references.length) {
+            const refs = section('引用模型');
+            references.forEach(function (node) { refs.append(nodeRow(node)); });
+            panel.append(refs);
         }
         updateHighlight();
     }
@@ -229,8 +233,13 @@
         selected = node.id;
         expanded = false;
         hideSearch();
+        if (highlighted && !highlighted.includes(node.id)) {
+            activeLineage = '';
+            category.value = '';
+            updateHighlight();
+        }
         renderSelected(node);
-        map.focus(node.id);
+        map.focus(node.id, {fitRelated: true});
         if (window.matchMedia('(max-width: 760px)').matches) {
             byId('graphCanvas').scrollIntoView({block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
         }
@@ -253,7 +262,7 @@
         if (activeLineage) {
             const group = model.lineage(activeLineage, {category: category.value});
             const latest = allNewest(group.members.concat(group.related))[0];
-            if (latest) map.focus(latest.id, {align: 'right'});
+            if (latest) map.focus(latest.id, {align: 'right', fitHighlight: true});
         }
     }
     function hideSearch() {
@@ -342,7 +351,6 @@
             payload = data.explorer;
             if (!payload || !window.GraphExplorerModel || !window.GraphMap || !window.cytoscape) throw new Error('graph dependencies unavailable');
             model = window.GraphExplorerModel.create(payload);
-            model.frontier().forEach(function (node) { recentIds.add(node.id); });
             map = window.GraphMap.create(byId('graphCanvas'), {
                 onSelect: select,
                 onViewportChange: function (viewport) {

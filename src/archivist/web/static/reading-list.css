@@ -1,5 +1,5 @@
 /* Reading index: give titles and summaries the full row. */
-.reading-list { color: var(--ink); }
+.reading-list { max-width: 1060px; margin-inline: auto; color: var(--ink); }
 .reading-list [hidden] { display: none !important; }
 .reading-list button, .reading-list input, .reading-list select { font: inherit; }
 .reading-list .sub-tabs { gap: 28px; margin: 0 0 22px; border-bottom: 1px solid var(--line); overflow: visible; }

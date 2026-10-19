@@ -2,327 +2,149 @@
 {% block title %}{{ paper.model_name or paper.title }} — Archivist{% endblock %}
 
 {% block head_extra %}
-<!-- Mermaid (lazy load only on detail pages) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='reading-detail.css') }}?v={{ reading_detail_css_version }}">
+<script defer src="{{ url_for('static', filename='reading-detail.js') }}?v={{ reading_detail_js_version }}"></script>
+<!-- Mermaid remains confined to pages containing a reading document. -->
 <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
     mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
     document.querySelectorAll('code.language-mermaid').forEach(block => {
-        const pre = block.parentElement;
         const div = document.createElement('div');
         div.className = 'mermaid';
         div.textContent = block.textContent;
-        pre.replaceWith(div);
+        block.parentElement.replaceWith(div);
     });
     await mermaid.run();
 </script>
 {% endblock %}
 
+{% macro related_papers(items) %}
+<ul class="rd-refs-list">
+    {% for p in items %}
+    <li>
+        {% if p.slug %}
+        <a href="/reading/{{ p.year }}/{{ p.slug }}/" class="rd-related-item">
+            <strong>{{ p.model_name or p.title }}</strong>
+            {% if p.title and p.title != p.model_name %}<span>{{ p.title }}</span>{% endif %}
+        </a>
+        {% else %}
+        <div class="rd-related-item rd-unread"><strong>{{ p.model_name }}</strong><span>未精读</span></div>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% endmacro %}
+
 {% block content %}
-<div class="detail-page">
-    <a href="/reading/" class="back-link">← Back to list</a>
+{% set has_related = related.outperforms or related.outperformed_by or appears_in or paper.model_name %}
+<div class="reading-detail{% if not toc %} rd-without-toc{% endif %}{% if not has_related %} rd-without-refs{% endif %}">
+    <a href="/reading/" class="rd-back">← 论文</a>
 
-    <!-- Metadata card -->
-    <div class="meta-card">
-        {% if paper.model_name %}
-        <div class="meta-model-name">{{ paper.model_name }}</div>
-        {% endif %}
-        <h1 class="meta-title">{{ paper.title }}</h1>
-
-        <div class="meta-row">
+    <header class="rd-paper-header">
+        <h1 class="rd-paper-title">{{ paper.title }}</h1>
+        <div class="rd-meta">
+            {% if paper.model_name %}<span class="rd-model">{{ paper.model_name }}</span>{% endif %}
+            <span>{{ company or "学术" }}</span>
             {% for c in paper.category %}
-            <span class="tag tag-{{ c }}">
-                {{ "生成式推荐" if c == "generative-rec" else "判别式推荐" if c == "discriminative-rec" else "LLM" if c == "llm" else c }}
-            </span>
+            <span>{{ "生成式" if c == "generative-rec" else "判别式" if c == "discriminative-rec" else "LLM" if c == "llm" else c }}</span>
             {% endfor %}
-            {% if company %}
-            <span class="tag tag-company">{{ company }}</span>
-            {% else %}
-            <span class="tag tag-academic">学术</span>
-            {% endif %}
-            <div class="meta-scores">
-                <span class="score score-abstract" title="Abstract score">Abstract {{ "%.0f" | format(paper.score) if paper.score else "—" }}</span>
-                <span class="score-sep">│</span>
-                <span class="score score-reading" title="Reading score">Reading {{ "%.0f" | format(paper.reading_score) if paper.reading_score else "—" }}</span>
-                <span class="score-sep">│</span>
-                <span class="score score-rating" title="Human rating">Rating {{ paper.rating if paper.rating else "—" }}</span>
+            {% if paper.published_date %}<time datetime="{{ paper.published_date }}" class="rd-date">{{ paper.published_date }}</time>{% endif %}
+            <div class="rd-scores" aria-label="论文评分">
+                <span>精读<b>{{ "%.0f" | format(paper.reading_score) if paper.reading_score else "—" }}</b></span>
+                <span>摘要<b>{{ "%.0f" | format(paper.score) if paper.score else "—" }}</b></span>
+                <span>用户<b>{{ paper.rating if paper.rating is not none else "—" }}</b></span>
             </div>
-            {% if paper.published_date %}
-            <span class="meta-date">{{ paper.published_date }}</span>
-            {% endif %}
-        </div>
-
-        {% if paper.authors %}
-        <div class="meta-authors">{{ paper.authors | join(', ') }}</div>
-        {% endif %}
-        {% if paper.affiliations %}
-        <div class="meta-affiliations">{{ paper.affiliations | join(', ') }}</div>
-        {% endif %}
-
-        {% if paper.one_line_summary %}
-        <div class="meta-summary">{{ paper.one_line_summary }}</div>
-        {% endif %}
-
-        {% if paper.score_reason or paper.reading_score_reason or paper.rating_reason %}
-        <details class="meta-score-reasons">
-            <summary>评分原因</summary>
-            <div class="score-reasons-content">
-                {% if paper.score_reason %}
-                <div class="score-reason-item"><strong>摘要评分：</strong>{{ paper.score_reason }}</div>
-                {% endif %}
-                {% if paper.reading_score_reason %}
-                <div class="score-reason-item"><strong>精读评分：</strong>{{ paper.reading_score_reason }}</div>
-                {% endif %}
-                {% if paper.rating_reason %}
-                <div class="score-reason-item"><strong>用户评分：</strong>{{ paper.rating_reason }}</div>
-                {% endif %}
+            <div class="rd-sources">
+                {% if paper.url %}<a href="{{ paper.url }}" target="_blank" rel="noopener noreferrer">ArXiv ↗</a>{% endif %}
+                {% if paper.arxiv_id %}<a href="https://arxiv.org/pdf/{{ paper.arxiv_id | urlencode }}" target="_blank" rel="noopener noreferrer">PDF ↗</a>{% endif %}
             </div>
-        </details>
-        {% endif %}
-
-        {% if paper.tags %}
-        <div class="meta-tags">
-            {% for t in paper.tags %}
-            <span class="tag-pill">{{ t }}</span>
-            {% endfor %}
         </div>
-        {% endif %}
 
-        <div class="meta-links">
-            {% if paper.url %}
-            <a href="{{ paper.url }}" target="_blank" class="meta-link">ArXiv</a>
+        {% if paper.one_line_summary %}<p class="rd-summary">{{ paper.one_line_summary }}</p>{% endif %}
+
+        <div class="rd-extra">
+            {% if paper.authors or paper.affiliations or paper.date_added or paper.generated_by or paper.arxiv_id %}
+            <details>
+                <summary>作者与归档信息</summary>
+                <div class="rd-extra-content">
+                    {% if paper.authors %}<p>{{ paper.authors | join('、') }}</p>{% endif %}
+                    {% if paper.affiliations %}<p>机构：{{ paper.affiliations | join('、') }}</p>{% endif %}
+                    {% if paper.arxiv_id %}<p>arXiv：{{ paper.arxiv_id }}</p>{% endif %}
+                    {% if paper.date_added %}<p>归档于 {{ paper.date_added[:10] }}</p>{% endif %}
+                    {% if paper.generated_by %}<p>精读生成：{{ paper.generated_by }}{% if paper.reasoning_effort %} · {{ paper.reasoning_effort }}{% endif %}</p>{% endif %}
+                </div>
+            </details>
             {% endif %}
-            {% if paper.arxiv_id %}
-            <a href="https://arxiv.org/pdf/{{ paper.arxiv_id | urlencode }}" target="_blank" rel="noopener noreferrer" class="meta-link">PDF</a>
+            {% if paper.score_reason or paper.reading_score_reason or paper.rating_reason %}
+            <details>
+                <summary>评分依据</summary>
+                <div class="rd-extra-content">
+                    {% if paper.score_reason %}<p><strong>摘要 {{ "%.0f" | format(paper.score) }}：</strong>{{ paper.score_reason }}</p>{% endif %}
+                    {% if paper.reading_score_reason %}<p><strong>精读 {{ "%.0f" | format(paper.reading_score) }}：</strong>{{ paper.reading_score_reason }}</p>{% endif %}
+                    {% if paper.rating_reason %}<p><strong>用户 {{ paper.rating if paper.rating is not none else "—" }}：</strong>{{ paper.rating_reason }}</p>{% endif %}
+                </div>
+            </details>
             {% endif %}
-            {% if paper.generated_by %}
-            <span class="meta-generated-by">{{ paper.generated_by }}{% if paper.reasoning_effort %} · {{ paper.reasoning_effort }}{% endif %}</span>
-            {% endif %}
-            {% if paper.date_added %}
-            <span class="meta-date-added">Archived {{ paper.date_added[:10] }}</span>
+            {% if paper.tags %}
+            <div class="rd-visible-tags" aria-label="主题标签">
+                <span class="rd-tag-label">主题</span>
+                {% for t in paper.tags %}<span>{{ t }}</span>{% endfor %}
+            </div>
             {% endif %}
         </div>
-    </div>
+    </header>
 
-    {% if toc %}
-    <!-- Mobile TOC drawer (hidden on desktop via CSS) -->
-    <button class="toc-drawer-btn" onclick="document.getElementById('tocDrawer').classList.toggle('open'); document.getElementById('tocDrawerBackdrop').classList.toggle('open');">
-        ≡ 目录
-    </button>
-    <div class="toc-drawer" id="tocDrawer">
-        <div class="toc-title">目录</div>
-        {{ toc | safe }}
-    </div>
-    <div class="toc-drawer-backdrop" id="tocDrawerBackdrop" onclick="document.getElementById('tocDrawer').classList.remove('open'); this.classList.remove('open');"></div>
-    {% endif %}
-
-    <!-- Content area: TOC left | content center | citations right -->
-    <div class="detail-body">
+    <div class="rd-layout">
         {% if toc %}
-        <aside class="toc-sidebar">
-            <div class="toc-title">Contents</div>
-            {{ toc | safe }}
+        <aside class="rd-contents" aria-label="文章目录">
+            <h2 class="rd-toc-title">目录</h2>
+            <nav class="rd-toc-links">{{ toc | safe }}</nav>
         </aside>
         {% endif %}
 
-        <article class="reading-content">
-            {{ content | safe }}
-        </article>
+        <div class="rd-main-column">
+            {% if toc %}
+            <details class="rd-mobile-toc">
+                <summary>文章目录</summary>
+                <nav class="rd-toc-links" aria-label="文章目录">{{ toc | safe }}</nav>
+            </details>
+            {% endif %}
+            <article class="rd-article" aria-label="完整精读文档">{{ content | safe }}</article>
+        </div>
 
-        {% if related.outperforms or related.outperformed_by or appears_in or paper.model_name %}
-        <aside class="refs-sidebar">
-            {% if paper.model_name %}
-            <div class="refs-section">
-                <div class="refs-title">Model Graph</div>
-                <ul class="refs-list">
-                    <li><a href="/graph?focus={{ paper.model_name | urlencode }}">
-                        <span class="refs-model">{{ paper.model_name }}</span>
-                        <span class="refs-paper-title">查看迭代关系</span>
-                    </a></li>
-                </ul>
-            </div>
-            {% endif %}
-            {% if appears_in %}
-            <div class="refs-section">
-                <div class="refs-title">Appears in Reports</div>
-                <ul class="refs-list">
-                    {% for d in appears_in %}
-                    <li><a href="{{ d.url }}">
-                        <span class="refs-model">{{ "日报" if d.period_type == "daily" else "周报" if d.period_type == "weekly" else "月报" }} · {{ d.id }}</span>
-                        {% if d.theme %}<span class="refs-paper-title">{{ d.theme }}</span>{% endif %}
-                    </a></li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
+        {% if has_related %}
+        <aside class="rd-related" aria-label="相关研究">
+            <h2 class="rd-refs-title">相关研究</h2>
             {% if related.outperformed_by %}
-            <div class="refs-section">
-                <div class="refs-title">Later Improvements</div>
-                <ul class="refs-list">
-                    {% for p in related.outperformed_by %}
-                    {% if p.slug %}
-                    <li><a href="/reading/{{ p.year }}/{{ p.slug }}/">
-                        <span class="refs-model">{{ p.model_name }}</span>
-                        <span class="refs-paper-title">{{ p.title }}</span>
-                    </a></li>
-                    {% else %}
-                    <li class="refs-noread">
-                        <span class="refs-model">{{ p.model_name }}</span>
-                        <span class="refs-paper-title">未精读</span>
-                    </li>
-                    {% endif %}
-                    {% endfor %}
-                </ul>
-            </div>
+            <section class="rd-refs-section">
+                <h3>后续改进</h3>
+                {{ related_papers(related.outperformed_by) }}
+            </section>
             {% endif %}
             {% if related.outperforms %}
-            <div class="refs-section">
-                <div class="refs-title">Compared Baselines</div>
-                <ul class="refs-list">
-                    {% for p in related.outperforms %}
-                    {% if p.slug %}
-                    <li><a href="/reading/{{ p.year }}/{{ p.slug }}/">
-                        <span class="refs-model">{{ p.model_name }}</span>
-                        <span class="refs-paper-title">{{ p.title }}</span>
+            <section class="rd-refs-section">
+                <h3>对比基线</h3>
+                {{ related_papers(related.outperforms) }}
+            </section>
+            {% endif %}
+            {% if paper.model_name %}
+            <a class="rd-related-graph" href="/graph?focus={{ paper.model_name | urlencode }}">{{ paper.model_name }} 模型关系 ↗</a>
+            {% endif %}
+            {% if appears_in %}
+            <section class="rd-refs-section rd-reports">
+                <h3>收录报告</h3>
+                <ul class="rd-refs-list">
+                    {% for d in appears_in %}
+                    <li><a class="rd-related-item" href="{{ d.url }}">
+                        <strong>{{ "日报" if d.period_type == "daily" else "周报" if d.period_type == "weekly" else "月报" }} · {{ d.id }}</strong>
+                        {% if d.theme %}<span>{{ d.theme }}</span>{% endif %}
                     </a></li>
-                    {% else %}
-                    <li class="refs-noread">
-                        <span class="refs-model">{{ p.model_name }}</span>
-                        <span class="refs-paper-title">未精读</span>
-                    </li>
-                    {% endif %}
                     {% endfor %}
                 </ul>
-            </div>
+            </section>
             {% endif %}
         </aside>
         {% endif %}
     </div>
-
-    {% if related.outperforms or related.outperformed_by or appears_in or paper.model_name %}
-    <!-- Mobile refs block: same content as .refs-sidebar but rendered below content -->
-    <aside class="refs-mobile">
-        {% if paper.model_name %}
-        <div class="refs-section">
-            <div class="refs-title">Model Graph</div>
-            <ul class="refs-list">
-                <li><a href="/graph?focus={{ paper.model_name | urlencode }}">
-                    <span class="refs-model">{{ paper.model_name }}</span>
-                    <span class="refs-paper-title">查看迭代关系</span>
-                </a></li>
-            </ul>
-        </div>
-        {% endif %}
-        {% if appears_in %}
-        <div class="refs-section">
-            <div class="refs-title">Appears in Reports</div>
-            <ul class="refs-list">
-                {% for d in appears_in %}
-                <li><a href="{{ d.url }}">
-                    <span class="refs-model">{{ "日报" if d.period_type == "daily" else "周报" if d.period_type == "weekly" else "月报" }} · {{ d.id }}</span>
-                    {% if d.theme %}<span class="refs-paper-title">{{ d.theme }}</span>{% endif %}
-                </a></li>
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
-        {% if related.outperformed_by %}
-        <div class="refs-section">
-            <div class="refs-title">Later Improvements</div>
-            <ul class="refs-list">
-                {% for p in related.outperformed_by %}
-                {% if p.slug %}
-                <li><a href="/reading/{{ p.year }}/{{ p.slug }}/">
-                    <span class="refs-model">{{ p.model_name }}</span>
-                    <span class="refs-paper-title">{{ p.title }}</span>
-                </a></li>
-                {% else %}
-                <li class="refs-noread">
-                    <span class="refs-model">{{ p.model_name }}</span>
-                    <span class="refs-paper-title">未精读</span>
-                </li>
-                {% endif %}
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
-        {% if related.outperforms %}
-        <div class="refs-section">
-            <div class="refs-title">Compared Baselines</div>
-            <ul class="refs-list">
-                {% for p in related.outperforms %}
-                {% if p.slug %}
-                <li><a href="/reading/{{ p.year }}/{{ p.slug }}/">
-                    <span class="refs-model">{{ p.model_name }}</span>
-                    <span class="refs-paper-title">{{ p.title }}</span>
-                </a></li>
-                {% else %}
-                <li class="refs-noread">
-                    <span class="refs-model">{{ p.model_name }}</span>
-                    <span class="refs-paper-title">未精读</span>
-                </li>
-                {% endif %}
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
-    </aside>
-    {% endif %}
 </div>
-
-<script>
-(function() {
-    const tocLinks = document.querySelectorAll('.toc-sidebar a[href^="#"]');
-    if (!tocLinks.length) return;
-
-    const headings = [];
-    tocLinks.forEach(function(link) {
-        const id = decodeURIComponent(link.getAttribute('href').slice(1));
-        const el = document.getElementById(id);
-        if (el) headings.push({ el: el, link: link });
-    });
-    if (!headings.length) return;
-
-    var active = null;
-    function update() {
-        var current = null;
-        var offset = 80;
-        for (var i = headings.length - 1; i >= 0; i--) {
-            if (headings[i].el.getBoundingClientRect().top <= offset) {
-                current = headings[i];
-                break;
-            }
-        }
-        if (!current) current = headings[0];
-        if (current && current.link !== active) {
-            if (active) active.classList.remove('toc-active');
-            current.link.classList.add('toc-active');
-            active = current.link;
-            var sidebar = document.querySelector('.toc-sidebar');
-            if (sidebar) {
-                var linkTop = active.offsetTop - sidebar.offsetTop;
-                var sidebarH = sidebar.clientHeight;
-                if (linkTop < sidebar.scrollTop || linkTop > sidebar.scrollTop + sidebarH - 30) {
-                    sidebar.scrollTop = linkTop - sidebarH / 3;
-                }
-            }
-        }
-    }
-
-    window.addEventListener('scroll', update, { passive: true });
-    update();
-})();
-
-// Mobile TOC drawer: close when any link inside is tapped
-(function() {
-    const drawer = document.getElementById('tocDrawer');
-    const backdrop = document.getElementById('tocDrawerBackdrop');
-    if (!drawer) return;
-    drawer.querySelectorAll('a').forEach(function(a) {
-        a.addEventListener('click', function() {
-            drawer.classList.remove('open');
-            if (backdrop) backdrop.classList.remove('open');
-        });
-    });
-})();
-</script>
 {% endblock %}

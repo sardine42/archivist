@@ -9,7 +9,7 @@ import yaml
 from archivist.config import PAPERS_DIR, BENCHMARKS_DIR, DOCS_DIR
 from archivist.services.dag import load_graph, get_datasets
 from archivist.services.benchmark import list_datasets, get_leaderboard, is_standard_metric
-from archivist.services.digest import load_digests, load_digest
+from archivist.services.digest import get_daily_statistics, load_digests, load_digest
 
 _company_rules_cache = None
 
@@ -552,6 +552,12 @@ def prepare_digests_data() -> dict:
     paper_meta_cache = _build_paper_meta_cache()
 
     def to_card(d):
+        stats = None
+        if d.period_type == "daily":
+            body = ""
+            if d.industry_count is None or d.academic_count is None:
+                _, body = load_digest("daily", d.id)
+            stats = get_daily_statistics(d, body)
         # Resolve highlight arxiv_ids → paper info
         highlights_info = []
         for aid in d.highlights:
@@ -573,6 +579,7 @@ def prepare_digests_data() -> dict:
             "period_end": d.period_end,
             "paper_count": d.paper_count,
             "deeply_read_count": d.deeply_read_count,
+            "stats": stats,
             "theme": d.theme,
             "theme_tags": d.theme_tags,
             "summary": d.summary,

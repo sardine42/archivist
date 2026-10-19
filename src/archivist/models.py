@@ -102,6 +102,9 @@ class DigestMeta:
     summary: str = ""
     theme_tags: list[str] = field(default_factory=list)
     date_created: str = field(default_factory=_now)
+    # None means a legacy report did not persist the affiliation counts.
+    industry_count: int | None = None
+    academic_count: int | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)

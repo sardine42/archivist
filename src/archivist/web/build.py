@@ -45,6 +45,13 @@ def build_site(output_dir: Path) -> None:
     env.globals["css_version"] = static_asset_version("style.css")
     env.globals["paper_search_version"] = static_asset_version("paper-search.js")
 
+    for key, filename in {
+        "reading_list_css_version": "reading-list.css",
+        "reading_detail_css_version": "reading-detail.css",
+        "reading_detail_js_version": "reading-detail.js",
+    }.items():
+        env.globals[key] = static_asset_version(filename)
+
     # Copy static assets
     static_out = output_dir / "static"
     shutil.copytree(STATIC_DIR, static_out)
@@ -108,6 +115,7 @@ def build_site(output_dir: Path) -> None:
         total=len(enriched),
         digest_count=digest_count,
         doc_count=doc_count,
+        latest_daily=digests["daily"][0] if digests["daily"] else None,
     )
     (reading_dir / "index.html").write_text(html, encoding="utf-8")
 

@@ -21,12 +21,11 @@
 <body>
     <header class="header">
         <div class="header-inner">
-            <a href="/" class="logo">Archivist</a>
-            <nav class="nav">
+            <a href="/" class="logo"><span class="logo-emblem" aria-hidden="true">A</span>Archivist</a>
+            <nav class="nav" aria-label="主导航">
                 <a href="/reading/" class="nav-link {% if request.path.startswith('/reading') %}active{% endif %}">Paper Reading</a>
                 <a href="/graph/" class="nav-link {% if request.path.startswith('/graph') %}active{% endif %}">Model Graph</a>
                 <a href="/benchmark/" class="nav-link {% if request.path.startswith('/benchmark') %}active{% endif %}">Benchmarks</a>
-                <a href="#" class="nav-link disabled">Chat</a>
             </nav>
         </div>
     </header>

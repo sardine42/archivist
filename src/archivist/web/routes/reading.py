@@ -6,7 +6,7 @@ from pathlib import Path
 import markdown
 from flask import Blueprint, abort, redirect, render_template, request, send_file
 
-from archivist.config import PAPERS_DIR
+from archivist.config import DOCS_DIR, PAPERS_DIR
 from archivist.services.paper_store import get_paper, get_paper_dir, list_papers
 from archivist.services.dag import load_graph
 
@@ -227,7 +227,8 @@ def paper_list():
     papers = _load_papers_enriched()
 
     # Always load digest counts for sub-tab badges
-    from archivist.web.data import prepare_digests_data
+    from archivist.web.data import load_docs, prepare_digests_data
+    doc_count = len(load_docs(DOCS_DIR))
     digests = prepare_digests_data()
     digest_count = len(digests["daily"]) + len(digests["weekly"]) + len(digests["monthly"])
 
@@ -237,6 +238,7 @@ def paper_list():
             doc_type="digests",
             total=len(papers),
             digest_count=digest_count,
+            doc_count=doc_count,
             daily=digests["daily"],
             weekly=digests["weekly"],
             monthly=digests["monthly"],
@@ -270,6 +272,8 @@ def paper_list():
         sort_by=sort_by,
         total=len(papers),
         digest_count=digest_count,
+        doc_count=doc_count,
+        latest_daily=digests["daily"][0] if digests["daily"] else None,
     )
 
 

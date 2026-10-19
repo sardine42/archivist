@@ -1,27 +1,46 @@
 {% extends "base.html" %}
 {% block title %}Paper Reading — Archivist{% endblock %}
 
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='reading-list.css') }}?v={{ reading_list_css_version }}">
+{% endblock %}
+
 {% block content %}
 <div class="reading-list">
-    <div class="page-header">
-        <h1>Paper Reading</h1>
-        <span class="paper-count">{{ total }} papers</span>
-    </div>
+    {% if doc_type != 'digests' and latest_daily %}
+    {% set stats = latest_daily.stats %}
+    <section class="latest-daily" aria-label="最新日报">
+        <div class="latest-daily-meta">
+            <a href="/reading/digest/daily/{{ latest_daily.id }}/">最新日报 <span aria-hidden="true">↗</span></a>
+            <time datetime="{{ latest_daily.id }}">{{ latest_daily.id }}</time>
+        </div>
+        {% if stats %}
+        <div class="latest-daily-stats" aria-label="日报统计">
+            {% if stats.total %}<span>共 {{ stats.total }} 篇</span>{% endif %}
+            {% if stats.deeply_read %}<span>精读 {{ stats.deeply_read }}</span>{% endif %}
+            {% if stats.industry %}<span>工业界 {{ stats.industry }}</span>{% endif %}
+            {% for cat in ['generative-rec', 'discriminative-rec', 'llm', 'other'] if stats.by_category.get(cat) %}
+            {% set count = stats.by_category[cat] %}
+            <span>{{ '生成式' if cat == 'generative-rec' else '判别式' if cat == 'discriminative-rec' else cat }} {{ count }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if latest_daily.theme %}<h2>{{ latest_daily.theme }}</h2>{% endif %}
+        {% if latest_daily.summary %}<p>{{ latest_daily.summary }}</p>{% endif %}
+    </section>
+    {% endif %}
 
     <!-- Sub-tabs -->
     <div class="sub-tabs">
         <a href="/reading/" class="sub-tab {{ 'active' if doc_type != 'digests' else '' }}">
-            <span class="sub-tab-icon">📄</span>
             <span class="sub-tab-label">论文</span>
             <span class="sub-tab-count">{{ total }}</span>
         </a>
         <a href="/reading/digests/" class="sub-tab {{ 'active' if doc_type == 'digests' else '' }}">
-            <span class="sub-tab-icon">📅</span>
             <span class="sub-tab-label">报告</span>
             <span class="sub-tab-count">{{ digest_count or 0 }}</span>
         </a>
         <a href="/docs/" class="sub-tab">
-            <span class="sub-tab-icon">🔒</span>
             <span class="sub-tab-label">个人文档</span>
             <span class="sub-tab-count">{{ doc_count or 0 }}</span>
         </a>
@@ -92,147 +111,87 @@
     </script>
     {% else %}
 
-    <!-- Filters -->
-    <div class="filters">
-        <label class="filter-label" for="paperSearch">搜索:</label>
-        <input type="search" id="paperSearch"
-               class="search-input"
-               placeholder="论文名、模型名或正文关键词…"
-               autocomplete="off"
-               aria-describedby="paperSearchStatus">
-
-        <label class="filter-label">类别:</label>
-        <div class="dropdown-multi" id="categoryFilter">
-            <div class="dropdown-btn" onclick="toggleDropdown('categoryFilter')">全部 ▾</div>
-            <div class="dropdown-menu">
-                <div class="dropdown-actions">
-                    <a onclick="checkAll('categoryFilter')">全选</a>
-                    <a onclick="clearAll('categoryFilter')">清空</a>
+    <div class="list-tools">
+        <label class="list-search" for="paperSearch">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+            <input type="search" id="paperSearch" class="search-input"
+                   placeholder="搜索论文、模型或正文关键词" aria-label="搜索论文、模型或正文关键词"
+                   autocomplete="off" aria-describedby="paperSearchStatus">
+        </label>
+        <div class="list-filters">
+            {% for filter_id, filter_label, options in [('categoryFilter', '类别', categories), ('companyFilter', '公司', companies), ('tagFilter', '标签', tag_list)] %}
+            <div class="filter-field">
+                <span id="{{ filter_id }}Label" class="filter-label">{{ filter_label }}</span>
+                <div class="dropdown-multi" id="{{ filter_id }}">
+                    <button type="button" class="dropdown-btn" onclick="toggleDropdown('{{ filter_id }}')" aria-expanded="false" aria-controls="{{ filter_id }}Menu" aria-labelledby="{{ filter_id }}Label {{ filter_id }}Button" id="{{ filter_id }}Button">全部 ▾</button>
+                    <div class="dropdown-menu" id="{{ filter_id }}Menu">
+                        <div class="dropdown-actions">
+                            <button type="button" onclick="checkAll('{{ filter_id }}')">全选</button>
+                            <button type="button" onclick="clearAll('{{ filter_id }}')">清空</button>
+                        </div>
+                        {% for value in options %}
+                        {% set label = '生成式' if value == 'generative-rec' else '判别式' if value == 'discriminative-rec' else 'LLM' if value == 'llm' else value %}
+                        <label class="dropdown-item"><input type="checkbox" checked value="{{ value }}" data-label="{{ label }}">{{ label }}</label>
+                        {% endfor %}
+                        {% if filter_id == 'companyFilter' %}
+                        <label class="dropdown-item"><input type="checkbox" checked value="" data-label="学术">学术</label>
+                        {% endif %}
+                    </div>
                 </div>
-                {% for cat in categories %}
-                <label class="dropdown-item">
-                    <input type="checkbox" checked value="{{ cat }}" data-label="{{ '生成式' if cat == 'generative-rec' else '判别式' if cat == 'discriminative-rec' else 'LLM' if cat == 'llm' else cat }}">
-                    {{ "生成式" if cat == "generative-rec" else "判别式" if cat == "discriminative-rec" else "LLM" if cat == "llm" else cat }}
-                </label>
-                {% endfor %}
             </div>
+            {% endfor %}
+            <label class="filter-field list-sort"><span class="filter-label">排序</span>
+                <select id="sortSelect" class="sort-select">
+                    {% for value, label in [('published_date', '发布日期 ↓'), ('date_added', '归档时间 ↓'), ('reading_score', '精读评分 ↓'), ('score', '摘要评分 ↓'), ('rating', '用户评分 ↓')] %}
+                    <option value="{{ value }}" {{ 'selected' if sort_by == value }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
         </div>
-
-        <label class="filter-label">公司:</label>
-        <div class="dropdown-multi" id="companyFilter">
-            <div class="dropdown-btn" onclick="toggleDropdown('companyFilter')">全部 ▾</div>
-            <div class="dropdown-menu">
-                <div class="dropdown-actions">
-                    <a onclick="checkAll('companyFilter')">全选</a>
-                    <a onclick="clearAll('companyFilter')">清空</a>
-                </div>
-                {% for co in companies %}
-                <label class="dropdown-item">
-                    <input type="checkbox" checked value="{{ co }}" data-label="{{ co }}">
-                    {{ co }}
-                </label>
-                {% endfor %}
-                <label class="dropdown-item">
-                    <input type="checkbox" checked value="" data-label="学术">
-                    学术
-                </label>
-            </div>
-        </div>
-
-        <label class="filter-label">标签:</label>
-        <div class="dropdown-multi" id="tagFilter">
-            <div class="dropdown-btn" onclick="toggleDropdown('tagFilter')" style="min-width:160px">全部 ▾</div>
-            <div class="dropdown-menu">
-                <div class="dropdown-actions">
-                    <a onclick="checkAll('tagFilter')">全选</a>
-                    <a onclick="clearAll('tagFilter')">清空</a>
-                </div>
-                {% for tag in tag_list %}
-                <label class="dropdown-item">
-                    <input type="checkbox" checked value="{{ tag }}" data-label="{{ tag }}">
-                    {{ tag }}
-                </label>
-                {% endfor %}
-            </div>
-        </div>
-
-        <label class="filter-label">排序:</label>
-        <select id="sortSelect" class="sort-select">
-            <option value="published_date" {{ "selected" if sort_by == "published_date" }}>发布日期 ↓</option>
-            <option value="date_added" {{ "selected" if sort_by == "date_added" }}>归档时间 ↓</option>
-            <option value="reading_score" {{ "selected" if sort_by == "reading_score" }}>精读评分 ↓</option>
-            <option value="score" {{ "selected" if sort_by == "score" }}>摘要评分 ↓</option>
-            <option value="rating" {{ "selected" if sort_by == "rating" }}>用户评分 ↓</option>
-        </select>
-
-        <button class="filter-confirm-btn" onclick="confirmFilters()">确定</button>
     </div>
-
     <div class="paper-search-feedback">
         <span id="paperSearchStatus" role="status" aria-live="polite"></span>
         <button type="button" id="paperSearchRetry" hidden>重试</button>
     </div>
-
-    <!-- Paper cards -->
+    <div id="paperResultCount" class="paper-result-count" role="status" aria-live="polite">全部论文</div>
     <div class="paper-cards" id="paperCards">
         {% for item in papers %}
         {% set p = item.meta %}
-        <div class="paper-card"
-             data-slug="{{ p.slug }}"
-             data-category="{{ p.category | join(',') }}"
-             data-company="{{ item.company }}"
-             data-tags="{{ p.tags | join(',') }}"
-             data-published-date="{{ p.published_date }}"
-             data-reading-score="{{ p.reading_score }}"
-             data-score="{{ p.score }}"
-             data-date-added="{{ p.date_added }}"
-             data-rating="{{ p.rating or 0 }}">
+        <article class="paper-card"
+             data-slug="{{ p.slug }}" data-category="{{ p.category | join(',') }}"
+             data-company="{{ item.company }}" data-tags="{{ p.tags | join(',') }}"
+             data-published-date="{{ p.published_date }}" data-reading-score="{{ p.reading_score }}"
+             data-score="{{ p.score }}" data-date-added="{{ p.date_added }}" data-rating="{{ p.rating or 0 }}">
             <span class="search-match-label" hidden></span>
-            <div class="card-top">
-                <div class="card-tags">
-                    {% for c in p.category %}
-                    <span class="tag tag-{{ c }}">
-                        {{ "生成式" if c == "generative-rec" else "判别式" if c == "discriminative-rec" else "LLM" if c == "llm" else c }}
-                    </span>
-                    {% endfor %}
-                    {% if item.company %}
-                    <span class="tag tag-company">{{ item.company }}</span>
-                    {% else %}
-                    <span class="tag tag-academic">学术</span>
-                    {% endif %}
-                </div>
-                <div class="card-scores">
-                    <span class="score score-abstract" title="Abstract score">{{ "%.0f" | format(p.score) if p.score else "—" }}</span>
-                    <span class="score-sep">│</span>
-                    <span class="score score-reading" title="Reading score">{{ "%.0f" | format(p.reading_score) if p.reading_score else "—" }}</span>
-                    <span class="score-sep">│</span>
-                    <span class="score score-rating" title="Human rating">{{ p.rating if p.rating else "—" }}</span>
-                </div>
-            </div>
-            {% if p.model_name %}
-            <a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-model">{{ p.model_name }}</a>
-            {% endif %}
-            <a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-title">{{ p.title }}</a>
-            {% if p.one_line_summary %}
-            <div class="card-summary">{{ p.one_line_summary }}</div>
-            {% endif %}
+            <h2><a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-title">{{ p.title }}</a></h2>
+            {% if p.one_line_summary %}<p class="card-summary">{{ p.one_line_summary }}</p>{% endif %}
             <div class="card-search-snippet" hidden></div>
             <div class="card-bottom">
-                <div class="card-tag-pills">
-                    {% for tag in p.tags[:5] %}
-                    <span class="tag-pill">{{ tag }}</span>
-                    {% endfor %}
+                <div class="card-facts">
+                    {% if p.model_name %}<a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-model">{{ p.model_name }}</a>{% endif %}
+                    <span>{{ item.company or '学术' }}</span>
+                    {% for c in p.category %}<span>{{ '生成式' if c == 'generative-rec' else '判别式' if c == 'discriminative-rec' else 'LLM' if c == 'llm' else c }}</span>{% endfor %}
+                    {% if p.published_date %}<time datetime="{{ p.published_date }}">{{ p.published_date }}</time>{% endif %}
                 </div>
-                {% if p.published_date %}
-                <span class="card-date">{{ p.published_date }}</span>
-                {% endif %}
+                <div class="card-scores">
+                    <span>精读 <b>{{ '%.0f' | format(p.reading_score) if p.reading_score else '—' }}</b></span>
+                    <span>摘要 <b>{{ '%.0f' | format(p.score) if p.score else '—' }}</b></span>
+                    <span>用户 <b>{{ p.rating if p.rating else '—' }}</b></span>
+                </div>
             </div>
-        </div>
+        </article>
         {% endfor %}
     </div>
     <div id="paperSearchEmpty" class="empty-state" hidden>没有找到匹配的论文，请调整关键词或筛选条件。</div>
+    <footer class="paper-list-footer">
+        <span class="paper-count">已收录 {{ total }} 篇论文</span>
+        <nav id="paperPagination" class="paper-pagination" aria-label="论文分页" hidden>
+            <button type="button" id="paperPrev" aria-label="上一页">‹</button>
+            <span id="paperPageStatus" aria-live="polite"></span>
+            <button type="button" id="paperNext" aria-label="下一页">›</button>
+        </nav>
+    </footer>
     <script src="{{ url_for('static', filename='paper-search.js') }}?v={{ paper_search_version }}" defer></script>
-    {% endif %}  {# end of doc_type != digests #}
+    {% endif %}
 </div>
-
 {% endblock %}

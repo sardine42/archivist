@@ -6,6 +6,12 @@ const searchStatus = document.getElementById('paperSearchStatus');
 const searchRetry = document.getElementById('paperSearchRetry');
 const paperContainer = document.getElementById('paperCards');
 const paperCards = [...paperContainer.querySelectorAll('.paper-card')];
+const pageSize = 6;
+const previousPage = document.getElementById('paperPrev');
+const nextPage = document.getElementById('paperNext');
+const pagination = document.getElementById('paperPagination');
+const pageStatus = document.getElementById('paperPageStatus');
+const resultCount = document.getElementById('paperResultCount');
 const cardsBySlug = new Map(paperCards.map(card => [card.dataset.slug, card]));
 const headingsBySlug = new Map(paperCards.map(card => [card.dataset.slug, [
     normalizeSearchText(card.querySelector('.card-title').textContent),
@@ -19,6 +25,8 @@ let searchTimer;
 let searchLoading = null;
 let searchPending = false;
 let composing = false;
+let currentPage = 1;
+let orderedCards = [...paperCards];
 
 function normalizeSearchText(value) {
     return value.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -43,17 +51,31 @@ function directHeadingMatches() {
     return matches;
 }
 
+function setDropdownOpen(dropdown, open) {
+    dropdown.classList.toggle('open', open);
+    dropdown.querySelector('.dropdown-btn').setAttribute('aria-expanded', String(open));
+}
+
 function toggleDropdown(id) {
-    document.getElementById(id).classList.toggle('open');
+    const selected = document.getElementById(id);
+    const shouldOpen = !selected.classList.contains('open');
     document.querySelectorAll('.dropdown-multi').forEach(dropdown => {
-        if (dropdown.id !== id) dropdown.classList.remove('open');
+        setDropdownOpen(dropdown, dropdown === selected && shouldOpen);
     });
 }
 
 document.addEventListener('click', event => {
     if (!event.target.closest('.dropdown-multi')) {
-        document.querySelectorAll('.dropdown-multi').forEach(dropdown => dropdown.classList.remove('open'));
+        document.querySelectorAll('.dropdown-multi').forEach(dropdown => setDropdownOpen(dropdown, false));
     }
+});
+
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    document.querySelectorAll('.dropdown-multi.open').forEach(dropdown => {
+        setDropdownOpen(dropdown, false);
+        dropdown.querySelector('.dropdown-btn').focus();
+    });
 });
 
 function getChecked(id) {
@@ -66,12 +88,12 @@ function getTotal(id) {
 
 function checkAll(id) {
     document.querySelectorAll(`#${id} input`).forEach(input => { input.checked = true; });
-    updateLabel(id);
+    confirmFilters();
 }
 
 function clearAll(id) {
     document.querySelectorAll(`#${id} input`).forEach(input => { input.checked = false; });
-    updateLabel(id);
+    confirmFilters();
 }
 
 function updateLabel(id) {
@@ -103,16 +125,23 @@ function applyFilters() {
     ['categoryFilter', 'companyFilter', 'tagFilter'].forEach(updateLabel);
     snippetObserver?.disconnect();
 
-    let visible = 0;
-    paperCards.forEach(card => {
+    const matchingCards = orderedCards.filter(card => {
         const slug = card.dataset.slug;
         const categoryOK = allCats || card.dataset.category.split(',').some(cat => cats.includes(cat));
         const companyOK = allCompanies || companies.includes(card.dataset.company);
         const tagOK = allTags || card.dataset.tags.split(',').some(tag => tags.includes(tag));
         const match = searchMatches?.get(slug);
-        const show = categoryOK && companyOK && tagOK && (searchMatches === null || !!match);
+        return categoryOK && companyOK && tagOK && (searchMatches === null || !!match);
+    });
+    const totalPages = Math.max(1, Math.ceil(matchingCards.length / pageSize));
+    currentPage = Math.min(Math.max(1, currentPage), totalPages);
+    const visibleCards = new Set(matchingCards.slice((currentPage - 1) * pageSize, currentPage * pageSize));
+
+    paperCards.forEach(card => {
+        const slug = card.dataset.slug;
+        const match = searchMatches?.get(slug);
+        const show = visibleCards.has(card);
         card.style.display = show ? '' : 'none';
-        if (show) visible++;
 
         const label = card.querySelector('.search-match-label');
         label.hidden = !match;
@@ -132,8 +161,13 @@ function applyFilters() {
         }
     });
 
-    document.querySelector('.paper-count').textContent = `${visible} papers`;
-    document.getElementById('paperSearchEmpty').hidden = visible !== 0 || searchPending;
+    const hasFilters = searchMatches !== null || !allCats || !allCompanies || !allTags;
+    resultCount.textContent = hasFilters ? `${matchingCards.length} 篇匹配论文` : '全部论文';
+    pagination.hidden = matchingCards.length <= pageSize;
+    pageStatus.textContent = matchingCards.length ? `${currentPage} / ${totalPages}` : '';
+    previousPage.disabled = currentPage === 1;
+    nextPage.disabled = currentPage === totalPages;
+    document.getElementById('paperSearchEmpty').hidden = matchingCards.length !== 0 || searchPending;
 }
 
 function compareSelectedSort(a, b) {
@@ -149,7 +183,7 @@ function compareSelectedSort(a, b) {
 }
 
 function sortCards() {
-    const sorted = [...paperCards].sort((a, b) => {
+    orderedCards = [...paperCards].sort((a, b) => {
         if (searchMatches !== null) {
             // A hard tier, rather than a weight: body frequency cannot overtake a heading hit.
             const headingOrder = Number(headingMatches(b.dataset.slug)) - Number(headingMatches(a.dataset.slug));
@@ -158,11 +192,12 @@ function sortCards() {
         return compareSelectedSort(a, b);
     });
     const fragment = document.createDocumentFragment();
-    sorted.forEach(card => fragment.appendChild(card));
+    orderedCards.forEach(card => fragment.appendChild(card));
     paperContainer.appendChild(fragment);
 }
 
-function confirmFilters() {
+function confirmFilters({ resetPage = true } = {}) {
+    if (resetPage) currentPage = 1;
     sortCards();
     applyFilters();
 }
@@ -222,7 +257,7 @@ async function runKeywordSearch(version) {
         searchPending = false;
         searchStatus.textContent = '';
         searchRetry.hidden = true;
-        confirmFilters();
+        confirmFilters({ resetPage: false });
     } catch (error) {
         if (version !== searchVersion) return;
         searchLoading = null;
@@ -230,7 +265,7 @@ async function runKeywordSearch(version) {
         searchStatus.textContent = '正文搜索暂时不可用，当前仅显示标题和模型名匹配。';
         searchRetry.hidden = false;
         console.warn('Paper search failed:', error);
-        confirmFilters();
+        confirmFilters({ resetPage: false });
     }
 }
 
@@ -305,5 +340,22 @@ searchInput.addEventListener('keydown', event => {
     }
 });
 searchRetry.addEventListener('click', () => scheduleKeywordSearch(true));
+['categoryFilter', 'companyFilter', 'tagFilter'].forEach(id => {
+    const dropdown = document.getElementById(id);
+    setDropdownOpen(dropdown, false);
+    dropdown.addEventListener('change', () => confirmFilters());
+});
+document.getElementById('sortSelect').addEventListener('change', () => confirmFilters());
+previousPage.addEventListener('click', () => {
+    if (previousPage.disabled) return;
+    currentPage--;
+    applyFilters();
+});
+nextPage.addEventListener('click', () => {
+    if (nextPage.disabled) return;
+    currentPage++;
+    applyFilters();
+});
 // Restore a browser-preserved search value when returning from a paper detail.
 if (searchInput.value.trim()) scheduleKeywordSearch(true);
+else confirmFilters();

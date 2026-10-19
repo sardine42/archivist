@@ -34,6 +34,9 @@ def create_app(mode: str = "dev") -> Flask:
             "mode": mode,
             "css_version": static_asset_version("style.css"),
             "paper_search_version": static_asset_version("paper-search.js"),
+            "reading_list_css_version": static_asset_version("reading-list.css"),
+            "reading_detail_css_version": static_asset_version("reading-detail.css"),
+            "reading_detail_js_version": static_asset_version("reading-detail.js"),
         }
 
     # Register blueprints

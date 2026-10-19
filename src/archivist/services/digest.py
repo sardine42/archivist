@@ -10,6 +10,7 @@ Monthly: aggregates daily + weekly reports of the calendar month
 """
 
 import json
+import re
 from datetime import datetime, timezone, date as date_type, timedelta
 from pathlib import Path
 
@@ -157,6 +158,7 @@ def prepare_daily(date: str) -> dict:
             }
 
     papers = list(papers_by_arxiv.values())
+    industry_count = sum(1 for p in papers if p["company"])
     for p in papers:
         for cat in p["category"]:
             by_category[cat] = by_category.get(cat, 0) + 1
@@ -175,6 +177,8 @@ def prepare_daily(date: str) -> dict:
             "total": len(papers),
             "deeply_read": deep_read,
             "brief_only": brief_only,
+            "industry": industry_count,
+            "academic": len(papers) - industry_count,
             "by_category": by_category,
         },
     }
@@ -201,6 +205,8 @@ def write_daily(date: str, agent_data: dict) -> Path:
         period_end=range_end,
         paper_count=stats["total"],
         deeply_read_count=stats["deeply_read"],
+        industry_count=stats["industry"],
+        academic_count=stats["academic"],
         by_category={cat: [p["arxiv_id"] for p in papers if cat in p["category"]]
                      for cat in stats["by_category"]},
         highlights=agent_data.get("highlights", []),
@@ -217,10 +223,8 @@ def write_daily(date: str, agent_data: dict) -> Path:
     if meta.theme_tags:
         lines.append("**标签**: " + " · ".join(f"`{t}`" for t in meta.theme_tags))
         lines.append("")
-    industry_count = sum(1 for p in papers if p.get("company"))
-    academic_count = stats["total"] - industry_count
     lines.append(f"📊 **统计**: 共 {stats['total']} 篇 · 精读 {stats['deeply_read']} · "
-                 f"🏢 工业界 {industry_count} · 🎓 学术 {academic_count} · "
+                 f"🏢 工业界 {stats['industry']} · 🎓 学术 {stats['academic']} · "
                  + " · ".join(f"{cat} {cnt}" for cat, cnt in stats["by_category"].items()))
     lines.append("")
 
@@ -279,6 +283,29 @@ def write_daily(date: str, agent_data: dict) -> Path:
     write_text(md_path, "\n".join(lines))
     write_json(json_path, meta.to_dict())
     return md_path
+
+
+def get_daily_statistics(meta: DigestMeta, markdown: str = "") -> dict:
+    """Read daily counts, retaining legacy reports' recorded affiliation split.
+
+    Category membership is not exclusive: a paper can count in several classes.
+    Missing legacy counts stay unknown if no recorded statistics are available.
+    """
+    industry = meta.industry_count
+    academic = meta.academic_count
+    if industry is None or academic is None:
+        line = next((s for s in markdown.splitlines() if "**统计**" in s), "")
+        if industry is None and (match := re.search(r"工业界\s+(\d+)", line)):
+            industry = int(match[1])
+        if academic is None and (match := re.search(r"学术\s+(\d+)", line)):
+            academic = int(match[1])
+    return {
+        "total": meta.paper_count,
+        "deeply_read": meta.deeply_read_count,
+        "industry": industry,
+        "academic": academic,
+        "by_category": {cat: len(ids) for cat, ids in meta.by_category.items()},
+    }
 
 
 def _append_paper_block(lines: list, p: dict):

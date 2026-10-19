@@ -109,7 +109,9 @@
                 <nav class="rd-toc-links" aria-label="文章目录">{{ toc | safe }}</nav>
             </details>
             {% endif %}
-            <article class="rd-article" aria-label="完整精读文档">{{ content | safe }}</article>
+            {% with article_class='rd-article', article_label='完整精读文档' %}
+            {% include '_article_content.html' %}
+            {% endwith %}
         </div>
 
         {% if has_related %}

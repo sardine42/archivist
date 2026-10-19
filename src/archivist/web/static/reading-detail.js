@@ -4,17 +4,6 @@
     if (!root) return;
     const article = root.querySelector('.rd-article');
 
-    // Preserve each complete document table while containing wide columns.
-    article.querySelectorAll('table').forEach(function (table) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'rd-table-scroll';
-        wrapper.tabIndex = 0;
-        wrapper.setAttribute('role', 'region');
-        wrapper.setAttribute('aria-label', '数据表格，可横向滚动');
-        table.replaceWith(wrapper);
-        wrapper.append(table);
-    });
-
     // Standalone Markdown images become figures. The image and its full
     // description remain available; expanding changes only the figure width.
     article.querySelectorAll('p').forEach(function (paragraph) {

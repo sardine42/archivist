@@ -55,9 +55,9 @@
         </aside>
         {% endif %}
 
-        <article class="reading-content">
-            {{ content | safe }}
-        </article>
+        {% with article_class='document-panel', article_label='完整文档' %}
+        {% include '_article_content.html' %}
+        {% endwith %}
     </div>
 </div>
 

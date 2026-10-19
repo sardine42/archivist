@@ -46,6 +46,8 @@ def build_site(output_dir: Path) -> None:
     env.globals["paper_search_version"] = static_asset_version("paper-search.js")
 
     for key, filename in {
+        "article_content_css_version": "article-content.css",
+        "article_content_js_version": "article-content.js",
         "reading_list_css_version": "reading-list.css",
         "reading_detail_css_version": "reading-detail.css",
         "reading_detail_js_version": "reading-detail.js",

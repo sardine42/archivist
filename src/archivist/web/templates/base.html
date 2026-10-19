@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Archivist{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ css_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='article-content.css') }}?v={{ article_content_css_version }}">
     <!-- KaTeX -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -16,6 +17,7 @@
             ],
             throwOnError: false
         });"></script>
+    <script defer src="{{ url_for('static', filename='article-content.js') }}?v={{ article_content_js_version }}"></script>
     {% block head_extra %}{% endblock %}
 </head>
 <body>

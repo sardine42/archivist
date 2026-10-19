@@ -33,6 +33,8 @@ def create_app(mode: str = "dev") -> Flask:
         return {
             "mode": mode,
             "css_version": static_asset_version("style.css"),
+            "article_content_css_version": static_asset_version("article-content.css"),
+            "article_content_js_version": static_asset_version("article-content.js"),
             "paper_search_version": static_asset_version("paper-search.js"),
             "reading_list_css_version": static_asset_version("reading-list.css"),
             "reading_detail_css_version": static_asset_version("reading-detail.css"),

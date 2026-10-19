@@ -50,35 +50,6 @@ body:has(.reading-detail) > .main { max-width: none; padding: 28px var(--page-gu
 .rd-toc-links a { display: block; padding: 5px 0; color: var(--rd-dim); line-height: 1.55; overflow-wrap: anywhere; }
 .rd-toc-links a[aria-current="location"] { color: var(--rd-accent); font-weight: 600; }
 .rd-mobile-toc { display: none; }
-.rd-article { min-width: 0; font-size: 15px; line-height: 1.95; color: var(--rd-body); overflow-wrap: anywhere; }
-.rd-article :is(h1, h2, h3, h4, h5, h6) { color: var(--rd-ink); font-weight: 600; scroll-margin-top: 24px; line-height: 1.5; }
-.rd-article h1 { font-size: 23px; letter-spacing: -.3px; margin: 0 0 22px; }
-.rd-article h2 { font-size: 21px; letter-spacing: -.3px; margin: 38px 0 18px; }
-.rd-article h3 { font-size: 17px; margin: 28px 0 12px; }
-.rd-article :is(h4, h5, h6) { font-size: 15px; margin: 22px 0 10px; }
-.rd-article > :first-child { margin-top: 0; }
-.rd-article p { margin: 14px 0; }
-.rd-article strong { font-weight: 600; color: var(--rd-ink); }
-.rd-article ul, .rd-article ol { padding-left: 24px; margin: 16px 0; }
-.rd-article li { margin: 8px 0; padding-left: 2px; }
-.rd-article li p { margin: 6px 0; }
-.rd-article blockquote { border-left: 2px solid var(--rd-accent); padding: 3px 0 3px 18px; margin: 22px 0; color: var(--rd-body); }
-.rd-article blockquote > :first-child { margin-top: 0; }
-.rd-article blockquote > :last-child { margin-bottom: 0; }
-.rd-article pre { background: var(--rd-soft); padding: 15px 18px; border-radius: 5px; overflow-x: auto; margin: 22px 0; font-size: 13px; line-height: 1.65; }
-.rd-article code { background: var(--rd-soft); padding: 1px 4px; border-radius: 3px; font-size: .9em; }
-.rd-article pre code { background: none; padding: 0; }
-.rd-article hr { border: 0; border-top: 1px solid var(--rd-line); margin: 30px 0; }
-.rd-article img { display: block; max-width: 100%; height: auto; margin: 22px auto; border-radius: 5px; }
-.rd-article .anchor-link { color: #a6afbd; margin-left: 6px; font-size: .75em; text-decoration: none; }
-.rd-article .anchor-link:hover { color: var(--rd-accent); }
-.rd-article .wiki-link { color: var(--rd-accent); border-bottom-color: var(--rd-accent); }
-.rd-article .katex-display { overflow-x: auto; overflow-y: hidden; padding: 8px 0; margin: 22px 0; max-width: 100%; }
-.rd-article .katex { overflow-wrap: normal; }
-.rd-table-scroll { width: 100%; overflow-x: auto; margin: 22px 0; }
-.rd-article table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.8; }
-.rd-article th { text-align: left; font-weight: 500; color: var(--rd-dim); padding: 10px 9px; border-block: 1px solid var(--rd-line); }
-.rd-article td { padding: 12px 9px; border-bottom: 1px solid var(--rd-line); vertical-align: top; }
 .rd-article .rd-figure { margin: 26px 0; }
 .rd-figure img { margin: 0 auto; }
 .rd-figure-head { display: flex; justify-content: flex-end; margin-bottom: 8px; }
@@ -125,11 +96,6 @@ body:has(.reading-detail) > .main { max-width: none; padding: 28px var(--page-gu
     .rd-mobile-toc { display: block; border-bottom: 1px solid var(--rd-line); padding-bottom: 16px; margin-bottom: 26px; }
     .rd-mobile-toc summary { color: var(--rd-accent); font-size: 13px; }
     .rd-mobile-toc .rd-toc-links { margin-top: 14px; font-size: 12px; }
-    .rd-article { font-size: 15px; line-height: 1.9; }
-    .rd-article h1 { font-size: 21px; }
-    .rd-article h2 { font-size: 19px; }
-    .rd-article h3 { font-size: 16px; }
-    .rd-article th, .rd-article td { padding-inline: 7px; }
     .rd-figure-button { display: none; }
     .rd-figure.rd-expanded { margin-left: 0; width: 100%; }
     .rd-related { margin-top: 30px; }

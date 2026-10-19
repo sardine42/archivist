@@ -193,27 +193,8 @@ a:hover { text-decoration: underline; }
 .meta-generated-by { font-size: 12px; color: #aaa; }
 .meta-date-added { font-size: 12px; color: #aaa; }
 
-/* ── Reading Content (rendered markdown) ── */
-.reading-content { background: white; border-radius: 8px; padding: 32px 40px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); line-height: 1.8; font-size: 15px; }
-.reading-content h1 { font-size: 22px; margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
-.reading-content h2 { font-size: 19px; margin: 24px 0 10px; padding-bottom: 4px; border-bottom: 1px solid #f0f0f0; }
-.reading-content h3 { font-size: 16px; margin: 20px 0 8px; }
-.reading-content h4 { font-size: 15px; margin: 16px 0 6px; }
-.reading-content p { margin: 8px 0; }
-.reading-content ul, .reading-content ol { margin: 8px 0 8px 24px; }
-.reading-content li { margin: 4px 0; }
-.reading-content blockquote { margin: 12px 0; padding: 8px 16px; background: #f8f9fa; border-left: 3px solid #ddd; color: #555; }
-.reading-content pre { background: #f5f5f5; padding: 14px 18px; border-radius: 6px; overflow-x: auto; margin: 12px 0; font-size: 13px; line-height: 1.5; }
-.reading-content code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
-.reading-content pre code { background: none; padding: 0; }
-.reading-content table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
-.reading-content th { background: #f5f5f5; text-align: left; padding: 8px 12px; border: 1px solid #ddd; font-weight: 600; }
-.reading-content td { padding: 6px 12px; border: 1px solid #eee; }
-.reading-content tr:hover td { background: #f8f8ff; }
-.reading-content img { display: block; max-width: 100%; height: auto; margin: 16px auto; border-radius: 4px; }
-.reading-content p:has(img) { text-align: center; }
-.reading-content .anchor-link { color: #ccc; margin-left: 6px; font-size: 0.8em; text-decoration: none; }
-.reading-content .anchor-link:hover { color: #1976D2; }
+/* Container used by reports and personal documents. Body typography is shared. */
+.document-panel { background: white; border-radius: 8px; padding: 32px 40px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
 
 /* Wiki links */
 .wiki-link { color: #1976D2; border-bottom: 1px dashed #1976D2; }
@@ -342,17 +323,6 @@ a:hover { text-decoration: underline; }
     .refs-mobile .refs-model { display: block; font-weight: 600; color: #1976D2; font-size: 14px; }
     .refs-mobile .refs-paper-title { display: block; font-size: 11px; color: #888; line-height: 1.4; margin-top: 2px; }
 
-    /* — Reading content typography — */
-    .reading-content { font-size: 15px; line-height: 1.7; }
-    .reading-content img { max-width: 100%; height: auto; }
-    .reading-content pre { overflow-x: auto; }
-    .reading-content table { display: block; overflow-x: auto; white-space: nowrap; }
-    .reading-content table th,
-    .reading-content table td { font-size: 12px; padding: 4px 6px; }
-    .reading-content h1 { font-size: 22px; }
-    .reading-content h2 { font-size: 19px; }
-    .reading-content h3 { font-size: 17px; }
-
     /* — Digest cards — */
     .digest-card { padding: 14px; }
     .digest-theme { font-size: 14px; }
@@ -396,6 +366,10 @@ a { color: var(--accent); }
 /* Keep document contents beside their directory when the page grows wider. */
 @media (min-width: 1201px) {
     .detail-body:has(> .toc-sidebar) { display: grid; grid-template-columns: clamp(152px, 12vw, 260px) minmax(0, 1fr); gap: clamp(28px, 2vw, 48px); align-items: start; }
-    .detail-body > .reading-content { min-width: 0; }
+    .detail-body > .article-content { min-width: 0; }
     .detail-body > .toc-sidebar { position: sticky; top: 24px; left: auto; width: auto; max-height: calc(100vh - 48px); }
+}
+
+@media (max-width: 650px) {
+    .document-panel { padding: 20px 16px; }
 }

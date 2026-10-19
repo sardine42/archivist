@@ -21,7 +21,6 @@ body:has(.reading-detail) > .main { max-width: none; padding: 28px var(--page-gu
 .rd-paper-title { font-size: 30px; line-height: 1.4; letter-spacing: -.6px; font-weight: 600; overflow-wrap: anywhere; }
 .rd-meta { display: flex; gap: 7px 16px; align-items: baseline; flex-wrap: wrap; color: var(--rd-dim); font-size: 12px; margin-top: 16px; }
 .rd-meta > span { white-space: nowrap; }
-.rd-model { color: var(--rd-accent); font-weight: 600; }
 .rd-date { font-variant-numeric: tabular-nums; }
 .rd-scores { display: flex; gap: 13px; align-items: baseline; white-space: nowrap; }
 .rd-scores b { font-weight: 500; color: var(--rd-ink); font-variant-numeric: tabular-nums; margin-left: 4px; }

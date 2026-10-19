@@ -27,6 +27,9 @@ def create_app(mode: str = "dev") -> Flask:
     app.config["MODE"] = mode
     app.config["SECRET_KEY"] = "dev-secret-key"  # Override from config.yaml in production
 
+    from archivist.web.titles import format_paper_title
+    app.jinja_env.filters["paper_title"] = format_paper_title
+
     # Share content-based asset versions with the static builder.
     @app.context_processor
     def inject_globals():

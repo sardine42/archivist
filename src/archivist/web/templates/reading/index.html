@@ -159,17 +159,16 @@
         {% for item in papers %}
         {% set p = item.meta %}
         <article class="paper-card"
-             data-slug="{{ p.slug }}" data-category="{{ p.category | join(',') }}"
+             data-slug="{{ p.slug }}" data-model-name="{{ p.model_name or '' }}" data-category="{{ p.category | join(',') }}"
              data-company="{{ item.company }}" data-tags="{{ p.tags | join(',') }}"
              data-published-date="{{ p.published_date }}" data-reading-score="{{ p.reading_score }}"
              data-score="{{ p.score }}" data-date-added="{{ p.date_added }}" data-rating="{{ p.rating or 0 }}">
             <span class="search-match-label" hidden></span>
-            <h2><a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-title">{{ p.title }}</a></h2>
+            <h2><a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-title">{{ p.title | paper_title(p.model_name) }}</a></h2>
             {% if p.one_line_summary %}<p class="card-summary">{{ p.one_line_summary }}</p>{% endif %}
             <div class="card-search-snippet" hidden></div>
             <div class="card-bottom">
                 <div class="card-facts">
-                    {% if p.model_name %}<a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-model">{{ p.model_name }}</a>{% endif %}
                     <span>{{ item.company or '学术' }}</span>
                     {% if p.category %}<span class="category-badges">{% for c in p.category %}{{ category_badge(c) }}{% endfor %}</span>{% endif %}
                     {% if p.published_date %}<time datetime="{{ p.published_date }}">{{ p.published_date }}</time>{% endif %}

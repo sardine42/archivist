@@ -11,6 +11,7 @@ from archivist.config import PAPERS_DIR, DOCS_DIR
 from archivist.services.paper_store import list_papers, get_paper_dir
 from archivist.web import static_asset_version
 from archivist.web.data import load_docs
+from archivist.web.titles import format_paper_title
 from archivist.web.routes.reading import _normalize_company, _render_markdown, _resolve_wiki_links
 
 import click
@@ -40,6 +41,7 @@ def build_site(output_dir: Path) -> None:
         autoescape=select_autoescape(["html", "xml"]),
     )
     env.globals["url_for"] = _static_url_for
+    env.filters["paper_title"] = format_paper_title
     env.globals["request"] = _FakeRequest()
     env.globals["mode"] = "production"
     env.globals["css_version"] = static_asset_version("style.css")

@@ -15,7 +15,7 @@ const resultCount = document.getElementById('paperResultCount');
 const cardsBySlug = new Map(paperCards.map(card => [card.dataset.slug, card]));
 const headingsBySlug = new Map(paperCards.map(card => [card.dataset.slug, [
     normalizeSearchText(card.querySelector('.card-title').textContent),
-    normalizeSearchText(card.querySelector('.card-model')?.textContent || ''),
+    normalizeSearchText(card.dataset.modelName || ''),
 ]]));
 
 let searchMatches = null;

@@ -42,9 +42,8 @@
     <a href="/reading/" class="rd-back">← 论文</a>
 
     <header class="rd-paper-header">
-        <h1 class="rd-paper-title">{{ paper.title }}</h1>
+        <h1 class="rd-paper-title">{{ paper.title | paper_title(paper.model_name) }}</h1>
         <div class="rd-meta">
-            {% if paper.model_name %}<span class="rd-model">{{ paper.model_name }}</span>{% endif %}
             <span>{{ company or "学术" }}</span>
             {% if paper.category %}<span class="category-badges">{% for c in paper.category %}{{ category_badge(c) }}{% endfor %}</span>{% endif %}
             {% if paper.published_date %}<time datetime="{{ paper.published_date }}" class="rd-date">{{ paper.published_date }}</time>{% endif %}

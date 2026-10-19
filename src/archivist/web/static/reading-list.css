@@ -44,7 +44,6 @@
 .reading-list .card-bottom { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px 24px; color: var(--muted); font-size: 11px; }
 .card-facts { display: flex; gap: 5px 9px; flex-wrap: wrap; align-items: baseline; min-width: 0; }
 .card-facts > :not(:last-child) { padding-right: 9px; border-right: 1px solid var(--line); }
-.reading-list .card-model { display: inline; font-size: 11px; line-height: 1.5; font-weight: 600; font-family: inherit; color: var(--accent); margin: 0; overflow-wrap: anywhere; }
 .card-facts time { font-variant-numeric: tabular-nums; }
 .reading-list .card-scores { gap: 14px; font-size: 11px; white-space: nowrap; }
 .reading-list .card-scores b { font-size: 12px; font-weight: 500; color: var(--ink); }

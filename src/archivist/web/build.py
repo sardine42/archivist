@@ -9,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from archivist.config import PAPERS_DIR, DOCS_DIR
 from archivist.services.paper_store import list_papers, get_paper_dir
+from archivist.web import static_asset_version
 from archivist.web.data import load_docs
 from archivist.web.routes.reading import _normalize_company, _render_markdown, _resolve_wiki_links
 
@@ -41,8 +42,8 @@ def build_site(output_dir: Path) -> None:
     env.globals["url_for"] = _static_url_for
     env.globals["request"] = _FakeRequest()
     env.globals["mode"] = "production"
-    css_path = STATIC_DIR / "style.css"
-    env.globals["css_version"] = int(css_path.stat().st_mtime) if css_path.exists() else 1
+    env.globals["css_version"] = static_asset_version("style.css")
+    env.globals["paper_search_version"] = static_asset_version("paper-search.js")
 
     # Copy static assets
     static_out = output_dir / "static"

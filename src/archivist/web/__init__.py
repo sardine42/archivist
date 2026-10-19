@@ -1,8 +1,15 @@
 """Archivist web application."""
 
+from hashlib import sha256
 from pathlib import Path
 
 from flask import Flask
+
+
+def static_asset_version(filename: str) -> str:
+    """Change an asset's cache key only when its own content changes."""
+    asset_path = Path(__file__).parent / "static" / filename
+    return sha256(asset_path.read_bytes()).hexdigest()[:12]
 
 
 def create_app(mode: str = "dev") -> Flask:
@@ -20,12 +27,14 @@ def create_app(mode: str = "dev") -> Flask:
     app.config["MODE"] = mode
     app.config["SECRET_KEY"] = "dev-secret-key"  # Override from config.yaml in production
 
-    # Make mode + css version available in all templates
+    # Share content-based asset versions with the static builder.
     @app.context_processor
     def inject_globals():
-        css_path = Path(__file__).parent / "static" / "style.css"
-        css_version = int(css_path.stat().st_mtime) if css_path.exists() else 1
-        return {"mode": mode, "css_version": css_version}
+        return {
+            "mode": mode,
+            "css_version": static_asset_version("style.css"),
+            "paper_search_version": static_asset_version("paper-search.js"),
+        }
 
     # Register blueprints
     from archivist.web.routes.reading import reading_bp

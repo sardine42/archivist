@@ -231,7 +231,7 @@
         {% endfor %}
     </div>
     <div id="paperSearchEmpty" class="empty-state" hidden>没有找到匹配的论文，请调整关键词或筛选条件。</div>
-    <script src="{{ url_for('static', filename='paper-search.js') }}?v={{ css_version }}" defer></script>
+    <script src="{{ url_for('static', filename='paper-search.js') }}?v={{ paper_search_version }}" defer></script>
     {% endif %}  {# end of doc_type != digests #}
 </div>
 

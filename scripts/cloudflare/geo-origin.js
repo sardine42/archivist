@@ -1,5 +1,5 @@
 /*
- * Cloudflare module Worker draft. Deploy with compatibility_date >= 2024-11-11.
+ * Cloudflare module Worker. Deploy with compatibility_date >= 2024-11-11.
  * Set PUBLIC_HOST to the zone apex, and ALIYUN_ORIGIN to a same-zone DNS-only
  * A record pointing at the Aliyun origin. Keep apex/www DNS pointed at the primary origin.
  * Both origins must validate HTTPS for PUBLIC_HOST and www.PUBLIC_HOST.
@@ -18,7 +18,12 @@ export default {
     // leave a read-only request on the primary origin.
     if (replaySafe) ctx.passThroughOnException();
 
-    const bypassCache = url.pathname === "/docs" ||
+    // Pages and data change on every publication. Only static assets may reuse
+    // the edge cache; Pagefind entry scripts and manifests also need freshness.
+    const cacheableAsset = /\.(?:css|js|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|eot|wasm)$/i.test(url.pathname);
+    const bypassCache = !cacheableAsset ||
+      url.pathname.startsWith("/search/") ||
+      url.pathname === "/docs" ||
       url.pathname.startsWith("/docs/") ||
       /^\/reading\/\d+\/[^/]+\/pdf\/?$/.test(url.pathname) ||
       request.headers.has("Authorization");

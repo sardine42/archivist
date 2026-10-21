@@ -48,6 +48,8 @@ def create_app(mode: str = "dev") -> Flask:
             "graph_map_css_version": static_asset_version("graph-map.css"),
             "graph_explorer_js_version": static_asset_version("graph-explorer.js"),
             "graph_explorer_css_version": static_asset_version("graph-explorer.css"),
+            "recommendation_map_js_version": static_asset_version("recommendation-map.js"),
+            "recommendation_map_css_version": static_asset_version("recommendation-map.css"),
         }
 
     # Register blueprints

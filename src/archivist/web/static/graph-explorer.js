@@ -3,16 +3,13 @@
     const root = document.getElementById('graphExplorer');
     if (!root) return;
     const byId = function (id) { return document.getElementById(id); };
-    const searchInput = byId('graphSearch');
-    const results = byId('graphSearchResults');
-    const panel = byId('graphPanelBody');
-    const inspector = byId('graphInspector');
-    const close = byId('graphPanelClose');
-    const category = byId('graphCategory');
-    const loading = byId('graphLoading');
+    const searchInput = byId('graphSearch'), results = byId('graphSearchResults');
+    const topicPicker = byId('graphTopic'), inspector = byId('graphInspector');
+    const panel = byId('graphPanelBody'), loading = byId('graphLoading');
     const categoryNames = {'generative-rec': '生成式', 'discriminative-rec': '判别式', llm: 'LLM', other: '其他'};
-    let model, map, payload, selected = null, activeLineage = '', searchMatches = [], searchIndex = -1;
-    let highlighted = null, expanded = false;
+    let network, map, nodes, links, relations, linksByNode;
+    let selected = null, selectedLink = null, activeTopic = '', detailMode = null;
+    let searchMatches = [], searchIndex = -1;
 
     function el(tag, className, value) {
         const item = document.createElement(tag);
@@ -26,244 +23,228 @@
         item.addEventListener('click', callback);
         return item;
     }
-    function date(node) { return node.published_date || '日期未知'; }
     function label(node) { return node.model_name || node.title || node.id; }
-    function allNewest(nodes) {
-        return nodes.slice().sort(function (a, b) {
+    function date(node) { return node.published_date || '日期未知'; }
+    function newest(items) {
+        return items.slice().sort(function (a, b) {
             return (b.published_date || '').localeCompare(a.published_date || '') || label(a).localeCompare(label(b));
         });
-    }
-    function badges(node) {
-        const wrap = el('span', 'category-badges');
-        node.category.forEach(function (type) {
-            wrap.append(el('span', 'category-badge category-' + (categoryNames[type] ? type : 'other'), categoryNames[type] || type));
-        });
-        return wrap;
-    }
-    function nodeRow(node, description) {
-        const row = button('', 'gx-node-row', function () { select(node.id); });
-        const top = el('span', 'gx-row-top');
-        const name = el('span', 'gx-row-title', label(node));
-        top.append(name, el('time', 'gx-row-date', date(node)));
-        row.append(top);
-        row.append(el('span', 'gx-row-description', node.title === label(node) ? (node.summary || '') : node.title));
-        if (description) row.append(el('span', 'gx-row-relation', description));
-        if (!node.has_reading) row.append(el('span', 'gx-row-relation', '仅引用 · 未关联精读文档'));
-        return row;
-    }
-    function setPanelLabel(value, canClose) {
-        byId('graphPanelLabel').textContent = value;
-        close.hidden = !canClose;
-        inspector.classList.toggle('gx-detail-open', !!canClose && !!selected);
-        inspector.scrollTop = 0;
     }
     function section(title) {
         const part = el('section', 'gx-section');
         part.append(el('h3', '', title));
         return part;
     }
-    function memberships(node) {
-        return model.lineages.filter(function (item) {
-            return item.members.includes(node.id) || item.related_members.includes(node.id);
+    function badges(node) {
+        const wrap = el('span', 'category-badges');
+        (node.category || []).forEach(function (type) {
+            wrap.append(el('span', 'category-badge category-' + (categoryNames[type] ? type : 'other'), categoryNames[type] || type));
         });
+        return wrap;
+    }
+    function tags(values) {
+        const wrap = el('div', 'gx-tags');
+        values.forEach(function (tag) {
+            const item = button(tag, 'gx-tag', function () { chooseTopic(activeTopic === tag ? '' : tag); });
+            item.setAttribute('aria-pressed', String(activeTopic === tag));
+            wrap.append(item);
+        });
+        return wrap;
+    }
+    function nodeRow(node, description) {
+        const row = button('', 'gx-node-row', function () { select(node.id, true); });
+        const top = el('span', 'gx-row-top');
+        top.append(el('span', 'gx-row-title', label(node)), el('time', 'gx-row-date', date(node)));
+        row.append(top);
+        if (node.title !== label(node)) row.append(el('span', 'gx-row-description', node.title));
+        if (description) row.append(el('span', 'gx-row-relation', description));
+        return row;
+    }
+    function setURL(id) {
+        const url = new URL(location.href);
+        if (id) url.searchParams.set('focus', id);
+        else url.searchParams.delete('focus');
+        history.replaceState(null, '', url);
+    }
+    function normalize(value) { return String(value || '').normalize('NFKC').toLocaleLowerCase(); }
+    function search(query) {
+        const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
+        if (!terms.length) return [];
+        return network.nodes.map(function (node) {
+            const names = [label(node)].concat(node.aliases || []).map(normalize);
+            const title = normalize(node.title), topics = (node.tags || []).map(normalize);
+            const summary = normalize(node.summary);
+            let score = 0;
+            for (const term of terms) {
+                if (names.some(function (name) { return name === term; })) score += 120;
+                else if (names.some(function (name) { return name.startsWith(term); })) score += 80;
+                else if (names.some(function (name) { return name.includes(term); })) score += 60;
+                else if (title.includes(term)) score += 40;
+                else if (topics.some(function (tag) { return tag.includes(term); })) score += 15;
+                else if (summary.includes(term)) score += 5;
+                else return null;
+            }
+            return {node: node, score: score};
+        }).filter(Boolean).sort(function (a, b) {
+            return b.score - a.score || (b.node.published_date || '').localeCompare(a.node.published_date || '') || label(a.node).localeCompare(label(b.node));
+        }).map(function (item) { return item.node; });
     }
     function updateHighlight() {
-        let nodes = model.readNodes;
-        if (activeLineage) {
-            const group = model.lineage(activeLineage);
-            nodes = group.members.concat(group.related);
-        }
-        if (category.value) nodes = nodes.filter(function (node) { return node.category.includes(category.value); });
-        highlighted = activeLineage || category.value ? nodes.map(function (node) { return node.id; }) : null;
-        if (highlighted) map.showNodes(nodes);
-        map.setHighlight(highlighted);
-        category.dataset.category = category.value;
-        byId('graphClear').hidden = !highlighted && !selected;
-        root.querySelectorAll('.gx-lineage').forEach(function (item) {
-            item.setAttribute('aria-pressed', item.dataset.lineage === activeLineage ? 'true' : 'false');
-        });
-        const group = model.lineages.find(function (item) { return item.id === activeLineage; });
-        const paperCount = nodes.filter(function (node) { return node.has_reading; }).length;
-        const referenceCount = nodes.length - paperCount;
-        byId('graphContext').textContent = highlighted ? ((group ? group.label : '') + (category.value ? ' · ' + categoryNames[category.value] : '')).replace(/^ · /, '') + ' · ' + paperCount + ' 篇论文' + (referenceCount ? ' · ' + referenceCount + ' 个引用模型' : '') : '';
+        const query = searchInput.value.trim();
+        const matching = query ? new Set(search(query).map(function (node) { return node.id; })) : null;
+        const ids = activeTopic || query ? network.nodes.filter(function (node) {
+            return (!activeTopic || node.tags.includes(activeTopic)) && (!matching || matching.has(node.id));
+        }).map(function (node) { return node.id; }) : null;
+        map.setHighlight(ids);
     }
-    function showBrowse() {
-        selected = null;
-        expanded = false;
-        map.setSelection(null, {relatedIds: [], similarIds: [], relations: []});
-        panel.replaceChildren();
-        const group = activeLineage ? model.lineage(activeLineage, {category: category.value}) : null;
-        let nodes = group ? group.members : model.readNodes.filter(function (node) { return !category.value || node.category.includes(category.value); });
-        const references = group ? nodes.filter(function (node) { return !node.has_reading; }) : [];
-        nodes = allNewest(nodes.filter(function (node) { return node.has_reading; }));
-        setPanelLabel(group ? group.definition.label + ' · ' + nodes.length + ' 篇' : '最新发表', !!group || !!category.value);
-        const list = el('div', 'gx-node-list');
-        const maximum = group ? nodes.length : 16;
-        nodes.slice(0, maximum).forEach(function (node) { list.append(nodeRow(node)); });
-        if (!nodes.length) list.append(el('p', 'gx-empty', '这个范围内暂时没有论文。'));
-        panel.append(list);
-        if (group && group.related.length) {
-            const related = section('系列扩展');
-            group.related.forEach(function (node) { related.append(nodeRow(node)); });
-            panel.append(related);
-        }
-        if (references.length) {
-            const refs = section('引用模型');
-            references.forEach(function (node) { refs.append(nodeRow(node)); });
-            panel.append(refs);
-        }
-        updateHighlight();
+    function relationText(relation, focusId) {
+        if (relation.type === 'citation') return relation.source === focusId ? '本篇引用' : '引用本篇';
+        return '实验比较';
     }
-    function relationLabel(relation, focus) {
-        if (relation.type === 'citation') return relation.source === focus.id ? '本篇引用' : '引用本篇';
-        return relation.target === focus.id ? '与本篇比较的基线' : '实验中报告优于本篇';
+    function evidenceItems(pair) {
+        return pair.relation_ids.map(function (id) { return relations.get(id); }).filter(Boolean);
     }
-    function addEvidence(focus, relations) {
-        if (!relations.length) return;
-        const part = section('关系依据');
-        relations.forEach(function (relation) {
-            const from = model.nodes.get(relation.source), to = model.nodes.get(relation.target);
-            const details = el('details', 'gx-evidence');
-            const title = relation.type === 'citation' ? label(from) + ' 引用 ' + label(to) : label(from) + ' → ' + label(to) + ' · 实验比较';
-            details.append(el('summary', '', title));
-            details.append(el('p', '', relation.summary || (relation.type === 'citation' ? '论文中记录的引用关系。' : '论文中报告的实验比较，结果取决于数据集与实验设置。')));
-            if (relation.type === 'comparison' && relation.is_self_reported) details.append(el('p', '', '由论文作者报告'));
-            if (relation.datasets && Object.keys(relation.datasets).length) details.append(el('p', '', '数据集：' + Object.keys(relation.datasets).join('、')));
-            const source = model.resolve('paper:' + (relation.paper_id || '').replace(/v\d+$/, ''));
+    function appendEvidence(parent, items) {
+        items.forEach(function (relation) {
+            const from = nodes.get(relation.source), to = nodes.get(relation.target);
+            if (!from || !to) return;
+            const item = el('details', 'gx-evidence');
+            item.append(el('summary', '', label(from) + (relation.type === 'citation' ? ' 引用 ' : ' → ') + label(to) + (relation.type === 'comparison' ? ' · 实验比较' : '')));
+            if (relation.summary) item.append(el('p', '', relation.summary));
+            const datasets = Object.keys(relation.datasets || {});
+            if (datasets.length) item.append(el('p', '', '数据集：' + datasets.join('、')));
+            if (relation.is_self_reported) item.append(el('p', '', '由论文作者报告'));
+            const source = nodes.get('paper:' + (relation.paper_id || '').replace(/v\d+$/, ''));
             if (source && source.reading_url) {
-                const sourceLink = el('a', '', '来源：' + label(source) + ' ↗');
-                sourceLink.href = source.reading_url;
-                details.append(sourceLink);
+                const link = el('a', '', '来源：' + label(source) + ' ↗');
+                link.href = source.reading_url;
+                item.append(link);
             }
-            part.append(details);
+            parent.append(item);
         });
-        panel.append(part);
     }
-    function renderSelected(node) {
-        panel.replaceChildren();
-        setPanelLabel('论文与相关研究', true);
+    function renderNode(node, expanded) {
+        const main = el('div', 'gx-paper-main');
         const title = el('h2', 'gx-panel-title');
-        // title_html is produced by the shared, escaping server-side formatter.
-        title.innerHTML = node.title_html;
-        panel.append(title);
+        // This HTML comes from the shared server-side title formatter, which escapes metadata.
+        if (node.title_html) title.innerHTML = node.title_html;
+        else title.textContent = node.title;
+        main.append(title);
         const meta = el('div', 'gx-panel-meta');
         meta.append(badges(node), el('time', '', date(node)));
         if (node.company) meta.append(el('span', '', node.company));
-        if (node.reading_score > 0) meta.append(el('span', '', '精读 ' + node.reading_score));
-        panel.append(meta);
-        if (node.summary) {
-            const summary = el('p', 'gx-summary', node.summary);
-            summary.id = 'gx-paper-summary';
-            panel.append(summary);
-            if (summary.scrollHeight > summary.clientHeight + 2) {
-                const toggle = button('展开摘要', 'gx-summary-toggle', function () {
-                    const isExpanded = summary.classList.toggle('gx-summary-expanded');
-                    toggle.textContent = isExpanded ? '收起摘要' : '展开摘要';
-                    toggle.setAttribute('aria-expanded', String(isExpanded));
-                });
-                toggle.setAttribute('aria-controls', summary.id);
-                toggle.setAttribute('aria-expanded', 'false');
-                panel.append(toggle);
-            }
-        }
-        const links = el('div', 'gx-panel-links');
+        main.append(meta);
+        if (node.summary) main.append(el('p', 'gx-summary', node.summary));
+        if (node.tags.length) main.append(tags(node.tags));
+        const actions = el('div', 'gx-panel-links');
         if (node.reading_url) {
-            const reading = el('a', '', '阅读全文 ↗');
-            reading.href = node.reading_url;
-            links.append(reading);
+            const link = el('a', '', '阅读全文 ↗');
+            link.href = node.reading_url;
+            actions.append(link);
         }
         if (node.arxiv_url) {
-            const source = el('a', '', 'arXiv ↗');
-            source.href = node.arxiv_url;
-            source.target = '_blank';
-            source.rel = 'noopener noreferrer';
-            links.append(source);
+            const link = el('a', '', 'arXiv ↗');
+            link.href = node.arxiv_url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            actions.append(link);
         }
-        if (links.childElementCount) panel.append(links);
-        if (!node.has_reading) panel.append(el('p', 'gx-panel-intro', '这是其他论文中出现的引用模型，尚未关联精读文档；未知日期不代表最新研究。'));
-        const groups = memberships(node);
-        if (groups.length) {
-            const tags = el('div', 'gx-lineages');
-            groups.forEach(function (group) {
-                tags.append(button(group.label + ' 谱系', 'gx-lineage', function () { chooseLineage(group.id); }));
-            });
-            panel.append(tags);
-        }
-        const related = model.related(node.id, {limitPerSide: expanded ? model.nodes.size : 8});
-        const neighbors = related.before.concat(related.after);
-        const relations = Array.from(new Map(neighbors.flatMap(function (item) { return item.relations; }).map(function (relation) { return [relation.id, relation]; })).values());
-        map.showNodes([node].concat(neighbors.map(function (item) { return item.node; })));
-        map.setSelection(node.id, {
-            relatedIds: neighbors.map(function (item) { return item.node.id; }),
-            similarIds: related.similar.map(function (item) { return item.node.id; }),
-            relations: relations,
+        main.append(actions);
+        panel.append(main);
+        const neighbors = (linksByNode.get(node.id) || []).slice().sort(function (a, b) {
+            return Number(!!b.relation_ids.length) - Number(!!a.relation_ids.length) || b.weight - a.weight || a.id.localeCompare(b.id);
         });
-        const total = related.beforeTotal + related.afterTotal;
-        const direct = section('相关论文' + (total ? ' · ' + total : ''));
         if (neighbors.length) {
-            neighbors.forEach(function (item) {
-                const labels = Array.from(new Set(item.relations.map(function (relation) { return relationLabel(relation, node); })));
-                direct.append(nodeRow(item.node, labels.join(' · ')));
+            const related = section('相关论文 · ' + neighbors.length);
+            const list = el('div', 'gx-related-list');
+            neighbors.slice(0, expanded ? neighbors.length : 6).forEach(function (pair) {
+                const other = nodes.get(pair.source === node.id ? pair.target : pair.source);
+                const recorded = Array.from(new Set(evidenceItems(pair).map(function (relation) { return relationText(relation, node.id); })));
+                const common = pair.shared_tags.filter(function (tag) { return tag !== 'industrial' && tag !== 'academic'; });
+                const row = el('div', 'gx-related-item');
+                row.append(nodeRow(other, recorded.length ? recorded.join(' · ') : common.slice(0, 3).join(' · ')));
+                row.append(button('关联依据', 'gx-evidence-button', function () { selectLink(pair.id); }));
+                list.append(row);
             });
-            if (neighbors.length < total) direct.append(button('展开全部 ' + total + ' 篇关联论文', 'gx-more', function () { expanded = true; renderSelected(node); }));
-            direct.append(el('p', 'gx-section-note', '实线箭头指向实验中报告较优的模型；虚线箭头指向被引用论文。关系不等同于继承或统一排名。'));
-        } else direct.append(el('p', 'gx-empty', '暂未记录直接引用或实验比较关系。'));
-        panel.append(direct);
-        if (related.similar.length) {
-            const similar = section('同主题论文');
-            related.similar.forEach(function (item) {
-                const labels = item.sharedLineages.map(function (group) { return group.label; }).concat(item.sharedTags.slice(0, 2));
-                similar.append(nodeRow(item.node, Array.from(new Set(labels)).join(' · ')));
-            });
-            similar.append(el('p', 'gx-section-note', '依据共同谱系或主题标签推荐，不绘制推断关系线。'));
-            panel.append(similar);
+            related.append(list);
+            if (!expanded && neighbors.length > 6) related.append(button('展开全部 ' + neighbors.length + ' 篇', 'gx-more', function () {
+                panel.replaceChildren();
+                renderNode(node, true);
+            }));
+            panel.append(related);
         }
-        if (node.tags.length) {
-            const topics = section('主题标签');
-            const tags = el('div', 'gx-tags');
-            node.tags.forEach(function (tag) { tags.append(el('span', 'gx-tag', tag)); });
-            topics.append(tags);
-            panel.append(topics);
-        }
-        addEvidence(node, relations);
     }
-    function select(value, updateURL) {
-        const node = model.resolve(value);
+    function renderTag() {
+        const members = newest(network.nodes.filter(function (node) { return node.tags.includes(activeTopic); }));
+        const part = section(activeTopic + ' · ' + members.length + ' 篇论文');
+        const list = el('div', 'gx-topic-members');
+        members.forEach(function (node) { list.append(nodeRow(node)); });
+        part.append(list);
+        panel.append(part);
+    }
+    function renderLink(pair) {
+        const main = el('div', 'gx-paper-main');
+        const heading = el('div', 'gx-pair-heading');
+        heading.append(button(label(nodes.get(pair.source)), 'gx-pair-node', function () { select(pair.source, true); }), el('span', '', '—'), button(label(nodes.get(pair.target)), 'gx-pair-node', function () { select(pair.target, true); }));
+        main.append(heading);
+        if (pair.shared_tags.length) {
+            main.append(el('h3', 'gx-mini-heading', '共同标签'), tags(pair.shared_tags));
+        }
+        panel.append(main);
+        const evidence = evidenceItems(pair);
+        if (evidence.length) {
+            const part = section('记录的引用与实验比较 · ' + evidence.length);
+            appendEvidence(part, evidence);
+            panel.append(part);
+        }
+    }
+    function renderDetail() {
+        panel.replaceChildren();
+        inspector.hidden = !detailMode;
+        if (!detailMode) return;
+        byId('graphPanelLabel').textContent = detailMode === 'node' ? '论文与相关研究' : detailMode === 'link' ? '关联依据' : '主题标签';
+        if (detailMode === 'node') renderNode(nodes.get(selected), false);
+        else if (detailMode === 'link') renderLink(links.get(selectedLink));
+        else renderTag();
+    }
+    function select(id, focus, updateURL) {
+        const node = nodes.get(id);
         if (!node) return;
-        selected = node.id;
-        expanded = false;
+        selected = id;
+        selectedLink = null;
+        detailMode = 'node';
         hideSearch();
-        if (highlighted && !highlighted.includes(node.id)) {
-            activeLineage = '';
-            category.value = '';
-            updateHighlight();
-        }
-        renderSelected(node);
-        map.focus(node.id, {fitRelated: true});
-        if (window.matchMedia('(max-width: 760px)').matches) {
-            byId('graphCanvas').scrollIntoView({block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
-        }
-        byId('graphClear').hidden = false;
-        if (updateURL !== false) {
-            const url = new URL(location.href);
-            url.searchParams.set('focus', node.id);
-            history.replaceState(null, '', url);
-        }
+        map.setSelection(id);
+        if (focus) map.focus(id);
+        renderDetail();
+        if (updateURL !== false) setURL(id);
     }
-    function clearURL() {
-        const url = new URL(location.href);
-        url.searchParams.delete('focus');
-        history.replaceState(null, '', url);
+    function selectLink(id) {
+        if (!links.has(id)) return;
+        selected = null;
+        selectedLink = id;
+        detailMode = 'link';
+        map.setSelection(null, {linkId: id});
+        hideSearch();
+        setURL(null);
+        renderDetail();
     }
-    function chooseLineage(id) {
-        activeLineage = activeLineage === id ? '' : id;
-        clearURL();
-        showBrowse();
-        if (activeLineage) {
-            const group = model.lineage(activeLineage, {category: category.value});
-            const latest = allNewest(group.members.concat(group.related))[0];
-            if (latest) map.focus(latest.id, {align: 'right', fitHighlight: true});
-        }
+    function clearSelection() {
+        selected = null;
+        selectedLink = null;
+        detailMode = null;
+        map.setSelection(null);
+        if (document.activeElement && byId('graphCanvas').contains(document.activeElement)) document.activeElement.blur();
+        setURL(null);
+        hideSearch();
+        renderDetail();
+    }
+    function chooseTopic(value) {
+        activeTopic = value;
+        topicPicker.value = value;
+        if (!selected && !selectedLink) detailMode = activeTopic ? 'tag' : null;
+        updateHighlight();
+        renderDetail();
     }
     function hideSearch() {
         results.hidden = true;
@@ -271,44 +252,27 @@
         searchInput.removeAttribute('aria-activedescendant');
         searchIndex = -1;
     }
-    function updateSearchIndex(index) {
-        searchIndex = index;
-        results.querySelectorAll('[role="option"]').forEach(function (option, i) {
-            option.setAttribute('aria-selected', String(i === index));
-            if (i === index) {
-                searchInput.setAttribute('aria-activedescendant', option.id);
-                option.scrollIntoView({block: 'nearest'});
-            }
-        });
-    }
     function showSearch() {
-        if (!model) return;
+        if (!network) return;
+        updateHighlight();
         results.replaceChildren();
-        searchMatches = model.search(searchInput.value, 8);
         if (!searchInput.value.trim()) { hideSearch(); return; }
+        searchMatches = search(searchInput.value).slice(0, 8);
         searchIndex = -1;
         searchInput.removeAttribute('aria-activedescendant');
         searchMatches.forEach(function (node, index) {
-            const option = button('', 'gx-search-option', function () { select(node.id); });
+            const option = button('', 'gx-search-option', function () { select(node.id, true); });
             option.id = 'gx-search-option-' + index;
             option.setAttribute('role', 'option');
             option.setAttribute('aria-selected', 'false');
             const top = el('span', 'gx-row-top');
-            top.append(el('span', 'gx-row-title', label(node)), el('span', 'gx-row-date', date(node)));
+            top.append(el('span', 'gx-row-title', label(node)), el('time', 'gx-row-date', date(node)));
             option.append(top, el('span', 'gx-row-description', node.title));
-            option.append(el('span', 'gx-row-relation', node.has_reading ? '已精读' : '仅引用 · 未关联精读文档'));
             results.append(option);
         });
-        if (!searchMatches.length) results.append(el('p', 'gx-search-empty', '没有找到相关论文，请尝试模型名或其他关键词。'));
+        if (!searchMatches.length) results.append(el('p', 'gx-search-empty', '没有找到相关论文。'));
         results.hidden = false;
         searchInput.setAttribute('aria-expanded', 'true');
-    }
-    function latest() {
-        activeLineage = '';
-        category.value = '';
-        clearURL();
-        showBrowse();
-        map.reset();
     }
     function wire() {
         searchInput.addEventListener('input', showSearch);
@@ -319,78 +283,67 @@
                 if (results.hidden) showSearch();
                 if (!searchMatches.length) return;
                 event.preventDefault();
-                const next = searchIndex < 0 ? (event.key === 'ArrowDown' ? 0 : searchMatches.length - 1) : searchIndex + (event.key === 'ArrowDown' ? 1 : -1);
-                updateSearchIndex((next + searchMatches.length) % searchMatches.length);
+                searchIndex = searchIndex < 0 ? (event.key === 'ArrowDown' ? 0 : searchMatches.length - 1) : (searchIndex + (event.key === 'ArrowDown' ? 1 : -1) + searchMatches.length) % searchMatches.length;
+                results.querySelectorAll('[role="option"]').forEach(function (option, index) {
+                    option.setAttribute('aria-selected', String(index === searchIndex));
+                    if (index === searchIndex) {
+                        searchInput.setAttribute('aria-activedescendant', option.id);
+                        option.scrollIntoView({block: 'nearest'});
+                    }
+                });
             } else if (event.key === 'Enter' && !results.hidden && searchMatches.length) {
                 event.preventDefault();
-                select(searchMatches[Math.max(0, searchIndex)].id);
+                select(searchMatches[Math.max(0, searchIndex)].id, true);
             }
         });
         document.addEventListener('click', function (event) { if (!event.target.closest('.gx-search-wrap')) hideSearch(); });
-        document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && results.hidden && selected) { clearURL(); showBrowse(); } });
-        byId('graphLatest').addEventListener('click', latest);
+        document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && results.hidden && detailMode) clearSelection(); });
+        topicPicker.addEventListener('change', function () { chooseTopic(topicPicker.value); });
         byId('graphOverview').addEventListener('click', function () { map.overview(); });
-        byId('graphZoomIn').addEventListener('click', function () { map.zoomBy(1.3); });
-        byId('graphZoomOut').addEventListener('click', function () { map.zoomBy(1 / 1.3); });
-        byId('graphClear').addEventListener('click', function () { activeLineage = ''; category.value = ''; clearURL(); showBrowse(); });
-        close.addEventListener('click', function () { if (!selected) { activeLineage = ''; category.value = ''; } clearURL(); showBrowse(); });
-        category.addEventListener('change', function () { clearURL(); showBrowse(); });
-    }
-    function error() {
-        loading.replaceChildren();
-        const message = el('div', 'gx-load-error', '图谱暂时未能加载，请重试。');
-        message.append(button('重新加载', '', function () { location.reload(); }));
-        loading.append(message);
-        byId('graphCount').textContent = '加载失败';
+        byId('graphZoomIn').addEventListener('click', function () { map.zoomBy(1.25); });
+        byId('graphZoomOut').addEventListener('click', function () { map.zoomBy(0.8); });
+        byId('graphPanelClose').addEventListener('click', clearSelection);
     }
     async function init() {
         try {
-            const response = await fetch('/graph/data.json');
+            const response = await fetch('/graph/data.json', {cache: 'no-cache'});
             if (!response.ok) throw new Error('graph data unavailable');
-            const data = await response.json();
-            payload = data.explorer;
-            if (!payload || !window.GraphExplorerModel || !window.GraphMap || !window.cytoscape) throw new Error('graph dependencies unavailable');
-            model = window.GraphExplorerModel.create(payload);
-            map = window.GraphMap.create(byId('graphCanvas'), {
-                onSelect: select,
-                onViewportChange: function (viewport) {
-                    const zoom = viewport && (viewport.zoom || viewport.scale);
-                    if (Number.isFinite(zoom)) byId('graphZoom').textContent = Math.round(zoom * 100) + '%';
-                },
+            network = (await response.json()).explorer.network;
+            if (!network || !window.RecommendationMap) throw new Error('graph dependencies unavailable');
+            nodes = new Map(network.nodes.map(function (node) { return [node.id, node]; }));
+            links = new Map(network.links.map(function (link) { return [link.id, link]; }));
+            relations = new Map(network.relations.map(function (relation) { return [relation.id, relation]; }));
+            linksByNode = new Map(network.nodes.map(function (node) { return [node.id, []]; }));
+            network.links.forEach(function (link) { linksByNode.get(link.source).push(link); linksByNode.get(link.target).push(link); });
+            map = window.RecommendationMap.create(byId('graphCanvas'), {
+                onSelect: function (id) { select(id, false); },
+                onClear: clearSelection,
+                onLinkSelect: selectLink,
+                onViewportChange: function (viewport) { byId('graphZoom').textContent = Math.round(viewport.zoom * 100) + '%'; },
             });
-            map.render({nodes: model.readNodes, relations: payload.relations, lineages: model.lineages, asOf: payload.as_of});
-            byId('graphCount').textContent = '已收录 ' + model.readNodes.length + ' 篇论文';
-            model.lineages.forEach(function (group) {
-                const count = group.members.filter(function (id) { return model.nodes.get(id) && model.nodes.get(id).has_reading; }).length;
-                const chip = button(group.label, 'gx-lineage', function () { chooseLineage(group.id); });
-                chip.dataset.lineage = group.id;
-                chip.setAttribute('aria-pressed', 'false');
-                chip.title = group.description;
-                chip.append(el('span', '', String(count)));
-                byId('graphLineages').append(chip);
+            map.render(network);
+            byId('graphCount').textContent = '已收录 ' + nodes.size + ' 篇论文';
+            network.topics.forEach(function (topic) {
+                const option = el('option', '', topic.label + ' · ' + topic.count);
+                option.value = topic.id;
+                topicPicker.append(option);
             });
-            wire();
-            showBrowse();
             loading.hidden = true;
-            const focus = new URLSearchParams(location.search).get('focus');
+            wire();
+            const focus = new URL(location.href).searchParams.get('focus');
             if (focus) {
-                const normalized = focus.normalize('NFKC').trim().toLocaleLowerCase();
-                const exact = Array.from(model.nodes.values()).filter(function (item) {
-                    return [item.model_name].concat(item.aliases).some(function (name) {
-                        return String(name).normalize('NFKC').trim().toLocaleLowerCase() === normalized;
-                    });
-                });
-                if (!focus.startsWith('paper:') && !focus.startsWith('model:') && exact.length > 1) {
-                    searchInput.value = focus;
-                    showSearch();
-                    byId('graphContext').textContent = '同名模型有多篇论文，请选择搜索结果';
-                } else {
-                    const node = model.resolve(focus);
-                    if (node) select(node.id, false);
-                    else byId('graphContext').textContent = '未找到指定论文，请尝试搜索';
-                }
+                const exact = nodes.get(focus) || network.nodes.find(function (node) { return [label(node)].concat(node.aliases || []).some(function (name) { return normalize(name) === normalize(focus); }); });
+                if (exact) select(exact.id, true, false);
+                else { searchInput.value = focus; showSearch(); }
             }
-        } catch (reason) { error(); }
+            window.addEventListener('pagehide', function (event) { if (!event.persisted) map.destroy(); });
+        } catch (error) {
+            loading.replaceChildren();
+            const message = el('div', 'gx-load-error', '图谱暂时未能加载。');
+            message.append(button('重新加载', 'gx-button', function () { location.reload(); }));
+            loading.append(message);
+            byId('graphCount').textContent = '加载失败';
+        }
     }
     init();
 })();

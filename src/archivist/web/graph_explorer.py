@@ -15,6 +15,7 @@ import math
 import re
 from typing import Callable
 
+from archivist.web.graph_network import prepare_recommendation_network
 from archivist.web.titles import format_paper_title
 
 
@@ -197,7 +198,7 @@ def prepare_graph_explorer(
         })
 
     relations = sorted(relations_by_key.values(), key=lambda relation: relation["id"])
-    return {
+    explorer = {
         "nodes": nodes,
         "relations": relations,
         "lineages": lineages,
@@ -216,3 +217,5 @@ def prepare_graph_explorer(
             "merged_relations": merged_relations,
         },
     }
+    explorer["network"] = prepare_recommendation_network(explorer)
+    return explorer

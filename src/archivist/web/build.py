@@ -59,6 +59,8 @@ def build_site(output_dir: Path) -> None:
         "graph_map_css_version": "graph-map.css",
         "graph_explorer_js_version": "graph-explorer.js",
         "graph_explorer_css_version": "graph-explorer.css",
+        "recommendation_map_js_version": "recommendation-map.js",
+        "recommendation_map_css_version": "recommendation-map.css",
     }.items():
         env.globals[key] = static_asset_version(filename)
 

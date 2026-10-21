@@ -37,7 +37,8 @@
 {% endmacro %}
 
 {% block content %}
-{% set has_related = related.outperforms or related.outperformed_by or appears_in or paper.model_name %}
+{% set has_graph = paper.model_name and ('generative-rec' in paper.category or 'discriminative-rec' in paper.category) %}
+{% set has_related = related.outperforms or related.outperformed_by or appears_in or has_graph %}
 <div class="reading-detail{% if not toc %} rd-without-toc{% endif %}{% if not has_related %} rd-without-refs{% endif %}">
     <a href="/reading/" class="rd-back">← 论文</a>
 
@@ -127,7 +128,7 @@
                 {{ related_papers(related.outperforms) }}
             </section>
             {% endif %}
-            {% if paper.model_name %}
+            {% if has_graph %}
             <a class="rd-related-graph" href="/graph/?focus={{ (('paper:' ~ paper.arxiv_id) if paper.arxiv_id else paper.model_name) | urlencode }}">{{ paper.model_name }} 模型关系 ↗</a>
             {% endif %}
             {% if appears_in %}

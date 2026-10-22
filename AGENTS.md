@@ -49,6 +49,14 @@ git push github main            # 必要时 --force-with-lease
 - **force push**：远程只有你自己在推，必要时用 `--force-with-lease`（比 `--force` 更安全，会检查远端是否被他人改过）
 - **不要把绝对路径或用户信息写进受管理的文件**（否则会作为敏感信息推到 GitHub）
 
+## 公开仓库边界
+
+- 远程仓库只保留可复用的项目框架、默认配置和明确的虚构示例。用户配置、归档内容、真实运行统计、工作记录、部署记录及会话链接／标识只保留在被忽略的本地数据中；不得用 `git add -f` 绕过忽略规则。
+- 提交前运行 `uv run python scripts/check-repository-privacy.py` 检查 Git index；待推送快照可用 `--ref HEAD` 检查。脚本不读取未暂存、未跟踪或被忽略的工作区内容。
+- 用 `--message-file <file>` 同时检查拟提交信息；仍须人工审阅 `git diff --cached` 和提交信息中的自然语言记录、真实统计及部署域名，自动检查无法完整识别这些内容。
+- 文件示例使用相对路径、`/path/to/...`、`example.com` 和占位值。个人域名、服务器、账号及真实凭据不得进入默认配置或示例。
+- 待发布提交使用不含私人邮箱的公开 Git 身份（例如 GitHub noreply 邮箱和公开别名）；提交信息只说明框架改动，不写个人会话或工作区运行记录。
+
 # Agent 写入元数据规则
 
 所有元数据写入**必须通过 `archivist` CLI**，禁止 agent 直接调 python 脚本或用 Edit 工具改 meta.json / criteria 以外的数据文件：

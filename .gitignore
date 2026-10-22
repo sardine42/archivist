@@ -38,6 +38,41 @@ Thumbs.db
 # Deploy host / site base_url / lark user id live here and
 # deep-merge over config.yaml at runtime. See config.local.yaml.example.
 config.local.yaml
+config.local
+config.local.*
+!config.local.*.example
+.env
+.env.*
+!.env.example
+
+# Local agent sessions and machine overrides; keep shared project defaults.
+.codex/sessions/
+.codex/history.jsonl
+.codex/auth.json
+.codex/scheduled_tasks.json
+.codex/*.local.*
+.claude/projects/
+.claude/settings.local.json
+.claude/scheduled_tasks.json
+
+# Credentials belong outside the public framework repository.
+credentials.json
+credentials.yaml
+credentials.yml
+secrets.json
+secrets.yaml
+secrets.yml
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+.ssh/
+.aws/
+.gnupg/
+.git-credentials
+.netrc
 
 # ─── Archive (runtime data, not framework code) ───────────
 # 整个 archive/ 是流水线产物 + 个人数据（论文 PDF / 精读报告 /

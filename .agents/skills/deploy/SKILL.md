@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: 构建静态网站并部署到生产服务器，然后提交所有改动并推送到 GitHub。
+description: 构建静态网站并部署到生产服务器，然后提交项目框架改动并推送到 GitHub。
 ---
 
 # 部署与提交
@@ -21,8 +21,9 @@ source .venv/bin/activate && archivist deploy
 
 1. 确认当前在 main 分支：`git branch`
 2. 查看改动：`git status -s` 和 `git diff --stat`
-3. 暂存相关文件：`git add`（`.gitignore` 排除的路径需 `-f`）
-4. 提交，commit message 需简洁概括本次所有改动
+3. 只暂存本次项目框架相关文件：`git add <files>`。用户配置、归档内容和工作记录不得提交，也不得使用 `-f` 强制添加这些数据。
+4. 运行 `uv run python scripts/check-repository-privacy.py`，并审阅 `git diff --cached`，确认没有个人信息或运行记录。
+5. 提交信息只概括工程变化，不含个人会话、真实运行统计或部署记录；运行 `uv run python scripts/check-repository-privacy.py --message-file <file>` 检查拟提交信息后再提交。
 
 ### 3. 推送到远程
 

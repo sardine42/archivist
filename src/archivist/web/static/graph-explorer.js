@@ -5,10 +5,11 @@
     const byId = function (id) { return document.getElementById(id); };
     const searchInput = byId('graphSearch'), results = byId('graphSearchResults');
     const topicPicker = byId('graphTopic'), inspector = byId('graphInspector');
+    const companyPicker = byId('graphCompany'), companyNames = new Map();
     const panel = byId('graphPanelBody'), loading = byId('graphLoading');
     const categoryNames = {'generative-rec': '生成式', 'discriminative-rec': '判别式', llm: 'LLM', other: '其他'};
     let network, map, nodes, links, relations, linksByNode;
-    let selected = null, selectedLink = null, activeTopic = '', detailMode = null;
+    let selected = null, selectedLink = null, activeTopic = '', activeCompany = '', detailMode = null;
     let searchMatches = [], searchIndex = -1;
 
     function el(tag, className, value) {
@@ -25,6 +26,16 @@
     }
     function label(node) { return node.model_name || node.title || node.id; }
     function date(node) { return node.published_date || '日期未知'; }
+    function companyKey(node) {
+        const company = String(node.company || '').trim();
+        return company ? 'company:' + company : 'unattributed';
+    }
+    function matchesCompany(node) { return !activeCompany || companyKey(node) === activeCompany; }
+    function matchesScope(node) { return matchesCompany(node) && (!activeTopic || node.tags.includes(activeTopic)); }
+    function filteredNodes() {
+        const query = searchInput.value.trim();
+        return (query ? search(query) : network.nodes).filter(matchesScope);
+    }
     function newest(items) {
         return items.slice().sort(function (a, b) {
             return (b.published_date || '').localeCompare(a.published_date || '') || label(a).localeCompare(label(b));
@@ -92,10 +103,12 @@
     function updateHighlight() {
         const query = searchInput.value.trim();
         const matching = query ? new Set(search(query).map(function (node) { return node.id; })) : null;
-        const ids = activeTopic || query ? network.nodes.filter(function (node) {
-            return (!activeTopic || node.tags.includes(activeTopic)) && (!matching || matching.has(node.id));
-        }).map(function (node) { return node.id; }) : null;
+        const members = network.nodes.filter(function (node) {
+            return matchesScope(node) && (!matching || matching.has(node.id));
+        });
+        const ids = activeTopic || query ? members.map(function (node) { return node.id; }) : null;
         map.setHighlight(ids);
+        byId('graphCount').textContent = activeCompany || activeTopic || query ? '已筛选 ' + members.length + ' / ' + nodes.size + ' 篇论文' : '已收录 ' + nodes.size + ' 篇论文';
     }
     function relationText(relation, focusId) {
         if (relation.type === 'citation') return relation.source === focusId ? '本篇引用' : '引用本篇';
@@ -151,7 +164,9 @@
         }
         main.append(actions);
         panel.append(main);
-        const neighbors = (linksByNode.get(node.id) || []).slice().sort(function (a, b) {
+        const neighbors = (linksByNode.get(node.id) || []).filter(function (pair) {
+            return matchesCompany(nodes.get(pair.source === node.id ? pair.target : pair.source));
+        }).sort(function (a, b) {
             return Number(!!b.relation_ids.length) - Number(!!a.relation_ids.length) || b.weight - a.weight || a.id.localeCompare(b.id);
         });
         if (neighbors.length) {
@@ -174,11 +189,13 @@
             panel.append(related);
         }
     }
-    function renderTag() {
-        const members = newest(network.nodes.filter(function (node) { return node.tags.includes(activeTopic); }));
-        const part = section(activeTopic + ' · ' + members.length + ' 篇论文');
+    function renderFiltered() {
+        const members = newest(filteredNodes());
+        const names = [companyNames.get(activeCompany), activeTopic, searchInput.value.trim()].filter(Boolean);
+        const part = section(names.concat(members.length + ' 篇论文').join(' · '));
         const list = el('div', 'gx-topic-members');
         members.forEach(function (node) { list.append(nodeRow(node)); });
+        if (!members.length) list.append(el('p', 'gx-search-empty', '没有符合条件的论文。'));
         part.append(list);
         panel.append(part);
     }
@@ -202,14 +219,14 @@
         panel.replaceChildren();
         inspector.hidden = !detailMode;
         if (!detailMode) return;
-        byId('graphPanelLabel').textContent = detailMode === 'node' ? '论文与相关研究' : detailMode === 'link' ? '关联依据' : '主题标签';
+        byId('graphPanelLabel').textContent = detailMode === 'node' ? '论文与相关研究' : detailMode === 'link' ? '关联依据' : '筛选结果';
         if (detailMode === 'node') renderNode(nodes.get(selected), false);
         else if (detailMode === 'link') renderLink(links.get(selectedLink));
-        else renderTag();
+        else renderFiltered();
     }
     function select(id, focus, updateURL) {
         const node = nodes.get(id);
-        if (!node) return;
+        if (!node || !matchesCompany(node)) return;
         selected = id;
         selectedLink = null;
         detailMode = 'node';
@@ -242,9 +259,19 @@
     function chooseTopic(value) {
         activeTopic = value;
         topicPicker.value = value;
-        if (!selected && !selectedLink) detailMode = activeTopic ? 'tag' : null;
+        if (!selected && !selectedLink) detailMode = activeTopic || activeCompany ? 'filter' : null;
         updateHighlight();
         renderDetail();
+    }
+    function chooseCompany(value) {
+        activeCompany = value;
+        if (selected && !matchesCompany(nodes.get(selected)) || selectedLink && [links.get(selectedLink).source, links.get(selectedLink).target].some(function (id) { return !matchesCompany(nodes.get(id)); })) clearSelection();
+        map.setFilter(activeCompany ? network.nodes.filter(matchesCompany).map(function (node) { return node.id; }) : null);
+        if (!selected && !selectedLink) detailMode = activeCompany || activeTopic ? 'filter' : null;
+        updateHighlight();
+        renderDetail();
+        hideSearch();
+        map.overview();
     }
     function hideSearch() {
         results.hidden = true;
@@ -255,9 +282,10 @@
     function showSearch() {
         if (!network) return;
         updateHighlight();
+        if (detailMode === 'filter') renderDetail();
         results.replaceChildren();
         if (!searchInput.value.trim()) { hideSearch(); return; }
-        searchMatches = search(searchInput.value).slice(0, 8);
+        searchMatches = search(searchInput.value).filter(matchesScope).slice(0, 8);
         searchIndex = -1;
         searchInput.removeAttribute('aria-activedescendant');
         searchMatches.forEach(function (node, index) {
@@ -299,6 +327,7 @@
         document.addEventListener('click', function (event) { if (!event.target.closest('.gx-search-wrap')) hideSearch(); });
         document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && results.hidden && detailMode) clearSelection(); });
         topicPicker.addEventListener('change', function () { chooseTopic(topicPicker.value); });
+        companyPicker.addEventListener('change', function () { chooseCompany(companyPicker.value); });
         byId('graphOverview').addEventListener('click', function () { map.overview(); });
         byId('graphZoomIn').addEventListener('click', function () { map.zoomBy(1.25); });
         byId('graphZoomOut').addEventListener('click', function () { map.zoomBy(0.8); });
@@ -323,6 +352,19 @@
             });
             map.render(network);
             byId('graphCount').textContent = '已收录 ' + nodes.size + ' 篇论文';
+            const companies = new Map();
+            network.nodes.forEach(function (node) {
+                const key = companyKey(node);
+                companyNames.set(key, key === 'unattributed' ? '未标注公司' : String(node.company).trim());
+                companies.set(key, (companies.get(key) || 0) + 1);
+            });
+            Array.from(companies).sort(function (a, b) {
+                return Number(a[0] === 'unattributed') - Number(b[0] === 'unattributed') || companyNames.get(a[0]).localeCompare(companyNames.get(b[0]));
+            }).forEach(function (entry) {
+                const option = el('option', '', companyNames.get(entry[0]) + ' · ' + entry[1]);
+                option.value = entry[0];
+                companyPicker.append(option);
+            });
             network.topics.forEach(function (topic) {
                 const option = el('option', '', topic.label + ' · ' + topic.count);
                 option.value = topic.id;

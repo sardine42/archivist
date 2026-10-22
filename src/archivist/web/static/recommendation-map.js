@@ -64,11 +64,13 @@
         container.append(root);
         const measure = document.createElement('canvas').getContext('2d');
         let network = {nodes: [], links: []}, nodes = new Map(), links = new Map(), pointById = new Map();
-        let selected = null, selectedLink = null, highlighted = null, focused = null, related = new Set(), localLinks = new Map();
+        let selected = null, selectedLink = null, highlighted = null, filtered = null, focused = null, related = new Set(), localLinks = new Map();
         let width = 0, height = 0, worldWidth = 2400, worldHeight = 1400, baseZoom = 1;
         let camera = {zoom: 1, x: 0, y: 0}, frame = 0, labelTimer = 0, destroyed = false, pointer = null;
-        let initial = true, nodeViews = new Map(), edgeViews = [], dates = [], datePositions = [], tickDates = [];
+        let initial = true, filterChanged = false, nodeViews = new Map(), edgeViews = [], dates = [], datePositions = [], tickDates = [];
 
+        function nodeAllowed(id) { return nodes.has(id) && (!filtered || filtered.has(id)); }
+        function linkAllowed(link) { return link && nodeAllowed(link.source) && nodeAllowed(link.target); }
         function schedule(labels) {
             if (destroyed) return;
             if (labels) root.dataset.layoutNames = 'true';
@@ -95,6 +97,18 @@
             emitViewport();
         }
         function fit() {
+            if (filtered) {
+                const scope = Array.from(pointById.values()).filter(function (point) { return nodeAllowed(point.id); });
+                if (scope.length) {
+                    const left = Math.min.apply(null, scope.map(function (point) { return point.x; }));
+                    const right = Math.max.apply(null, scope.map(function (point) { return point.x; }));
+                    const labelPadding = PADDING + 70;
+                    const zoom = Math.min(baseZoom, Math.max(1, width - labelPadding * 2) / Math.max(1, right - left));
+                    camera = {zoom: zoom, x: width / 2 - (left + right) / 2 * zoom, y: (height - AXIS - worldHeight * zoom) / 2};
+                    viewportChanged(false);
+                    return;
+                }
+            }
             const zoom = overviewZoom();
             camera = {zoom: zoom, x: (width - worldWidth * zoom) / 2, y: (height - AXIS - worldHeight * zoom) / 2};
             viewportChanged(false);
@@ -103,6 +117,7 @@
             return Math.max(.05, Math.min((width - PADDING * 2) / worldWidth, (height - AXIS - PADDING * 2) / worldHeight));
         }
         function startView() {
+            if (filtered) { fit(); return; }
             if (network.nodes.length <= 90) { fit(); return; }
             let right = 0;
             pointById.forEach(function (point) { right = Math.max(right, point.x); });
@@ -202,14 +217,15 @@
             });
         }
         function connectionVisible(link) {
+            if (!linkAllowed(link)) return false;
             if (selectedLink) return link.id === selectedLink;
             if (selected) return (link.source === selected || link.target === selected) && (!!link.display || (link.types || []).length || (link.relation_ids || []).length || (localLinks.get(selected) || new Set()).has(link.id));
             if (highlighted) return !!link.display && highlighted.has(link.source) && highlighted.has(link.target);
             return !!link.display;
         }
         function updateRelated() {
-            related = new Set(selected ? [selected] : []);
-            if (selectedLink && links.has(selectedLink)) {
+            related = new Set(nodeAllowed(selected) ? [selected] : []);
+            if (selectedLink && linkAllowed(links.get(selectedLink))) {
                 const link = links.get(selectedLink); related.add(link.source); related.add(link.target);
             }
             if (selected) network.links.forEach(function (link) {
@@ -221,6 +237,7 @@
         function paint() {
             updateRelated();
             nodeViews.forEach(function (view, id) {
+                if (!nodeAllowed(id)) view.button.hidden = true;
                 const lit = highlighted || selected || selectedLink ? !!highlighted && highlighted.has(id) || related.has(id) : true;
                 view.button.classList.toggle('rm-dim', !lit);
                 view.button.classList.toggle('rm-highlight', !!highlighted && highlighted.has(id));
@@ -228,11 +245,12 @@
                 view.button.setAttribute('aria-pressed', String(id === selected));
             });
             leaderLayer.querySelectorAll('[data-rm-node-leader]').forEach(function (leader) {
-                const view = nodeViews.get(leader.getAttribute('data-rm-node-leader'));
+                const id = leader.getAttribute('data-rm-node-leader'), view = nodeViews.get(id);
+                leader.style.display = nodeAllowed(id) ? '' : 'none';
                 leader.setAttribute('stroke-opacity', view && view.button.classList.contains('rm-dim') ? '.08' : '.35');
             });
             edgeViews.forEach(function (view) {
-                const active = connectionVisible(view.link), faint = !highlighted && !selectedLink && selected && view.link.display;
+                const active = connectionVisible(view.link), faint = linkAllowed(view.link) && !highlighted && !selectedLink && selected && view.link.display;
                 const a = nodeViews.get(view.link.source).point, b = nodeViews.get(view.link.target).point;
                 const inside = function (point) { return point && point.x >= -14 && point.x <= width + 14 && point.y >= -14 && point.y <= height - AXIS + 14; };
                 const inFrame = selected || selectedLink || inside(a) && inside(b);
@@ -258,7 +276,7 @@
                 const size = nodeSize(), image = view.button.querySelector('svg');
                 image.style.width = size + 'px'; image.style.height = size + 'px';
                 image.style.left = (30 - size) / 2 + 'px'; image.style.top = (30 - size) / 2 + 'px';
-                const visible = point.x > -220 && point.x < width + 220 && point.y > -140 && point.y < height - AXIS + 140;
+                const visible = nodeAllowed(id) && point.x > -220 && point.x < width + 220 && point.y > -140 && point.y < height - AXIS + 140;
                 view.button.hidden = !visible;
                 if (visible) {
                     view.button.style.left = point.x + 'px'; view.button.style.top = point.y + 'px';
@@ -275,13 +293,15 @@
             });
             drawAxis();
             paint();
+            if (filtered || filterChanged) { updateRovingFocus(); filterChanged = false; }
         }
-        function nodeSize() { return clamp(28 * Math.sqrt(camera.zoom / baseZoom), 14, 34); }
+        function readableScope() { return filtered && filtered.size <= 90; }
+        function nodeSize() { return readableScope() ? 28 : clamp(28 * Math.sqrt(camera.zoom / baseZoom), 14, 34); }
         function placeNames() {
             leaderLayer.replaceChildren();
             leaderLayer.style.opacity = '';
             const occupied = grid(48), circles = grid(48), available = [];
-            const relative = camera.zoom / baseZoom, compact = relative < .65, fontSize = relative > 1.25 ? 12 : compact ? 9 : 11;
+            const relative = camera.zoom / baseZoom, compact = !readableScope() && relative < .65, fontSize = readableScope() ? 11 : relative > 1.25 ? 12 : compact ? 9 : 11;
             const labelGap = compact ? 2 : 3;
             const radius = nodeSize() * .44;
             nodeViews.forEach(function (view, id) {
@@ -384,15 +404,15 @@
             });
         }
         function setSelection(id, options) {
-            selected = nodes.has(id) ? id : null;
-            selectedLink = options && links.has(options.linkId) ? options.linkId : null;
+            selected = nodeAllowed(id) ? id : null;
+            selectedLink = options && linkAllowed(links.get(options.linkId)) ? options.linkId : null;
             paint();
         }
-        function selectNode(id) { setSelection(id); if (callbacks.onSelect) callbacks.onSelect(id); }
+        function selectNode(id) { if (!nodeAllowed(id)) return; setSelection(id); if (callbacks.onSelect) callbacks.onSelect(id); }
         function clear() { setSelection(null); if (callbacks.onClear) callbacks.onClear(); }
         function focus(id) {
             const point = pointById.get(id);
-            if (!point) return;
+            if (!point || !nodeAllowed(id)) return;
             camera.zoom = clamp(Math.max(camera.zoom, baseZoom * 1.45), overviewZoom() * .65, baseZoom * 6);
             camera.x = width / 2 - point.x * camera.zoom; camera.y = (height - AXIS) / 2 - point.y * camera.zoom;
             viewportChanged(false);
@@ -429,7 +449,7 @@
             if (root.hasPointerCapture(event.pointerId)) root.releasePointerCapture(event.pointerId);
             if (action.moved) { viewportChanged(false); return; }
             if (action.node) selectNode(action.node);
-            else if (action.link) { setSelection(null, {linkId: action.link}); if (callbacks.onLinkSelect) callbacks.onLinkSelect(action.link); }
+            else if (action.link && linkAllowed(links.get(action.link))) { setSelection(null, {linkId: action.link}); if (callbacks.onLinkSelect) callbacks.onLinkSelect(action.link); }
             else clear();
         }
         function onCancel() { pointer = null; root.classList.remove('rm-dragging'); }
@@ -438,8 +458,34 @@
             const rect = root.getBoundingClientRect();
             zoomAt(Math.exp(-clamp(event.deltaY, -120, 120) * .0025), event.clientX - rect.left, event.clientY - rect.top);
         }
+        function updateRovingFocus() {
+            const visible = Array.from(nodeViews.entries()).filter(function (entry) { return nodeAllowed(entry[0]) && !entry[1].button.hidden; });
+            if (!visible.some(function (entry) { return entry[0] === focused; })) {
+                visible.sort(function (a, b) {
+                    const distance = function (entry) {
+                        const point = entry[1].point || project(pointById.get(entry[0]));
+                        return Math.hypot(point.x - width / 2, point.y - (height - AXIS) / 2);
+                    };
+                    return distance(a) - distance(b) || a[0].localeCompare(b[0]);
+                });
+                focused = visible.length ? visible[0][0] : null;
+            }
+            nodeViews.forEach(function (view, id) { view.button.tabIndex = id === focused && nodeAllowed(id) ? 0 : -1; });
+        }
+        function setFilter(ids) {
+            filtered = ids == null ? null : new Set(ids);
+            filterChanged = true;
+            if (!nodeAllowed(selected)) selected = null;
+            if (!linkAllowed(links.get(selectedLink))) selectedLink = null;
+            const active = findNode(document.activeElement);
+            if (active && !nodeAllowed(active.dataset.rmNode)) root.focus({preventScroll: true});
+            if (!nodeAllowed(focused)) focused = null;
+            paint();
+            updateRovingFocus();
+            schedule(true);
+        }
         function keyboardFocus(id) {
-            if (!nodes.has(id)) return;
+            if (!nodeAllowed(id)) return;
             focused = id;
             nodeViews.forEach(function (view, key) { view.button.tabIndex = key === id ? 0 : -1; });
             const point = project(pointById.get(id));
@@ -454,12 +500,15 @@
             if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomAt(1.25, width / 2, (height - AXIS) / 2); return; }
             if (event.key === '-') { event.preventDefault(); zoomAt(.8, width / 2, (height - AXIS) / 2); return; }
             if (event.key === 'Home') { event.preventDefault(); fit(); return; }
-            if (event.key === 'End' && dates.length) {
+            if (event.key === 'End') {
                 event.preventDefault();
-                const latest = network.nodes.filter(function (node) { return (node.published_date || node.date || '').slice(0, 10) === dates[dates.length - 1]; })[0];
+                const latest = network.nodes.filter(function (node) { return nodeAllowed(node.id); }).sort(function (a, b) {
+                    return String(b.published_date || b.date || '').localeCompare(String(a.published_date || a.date || '')) || a.id.localeCompare(b.id);
+                })[0];
                 if (latest) { focus(latest.id); keyboardFocus(latest.id); } return;
             }
-            const target = findNode(event.target), current = target ? target.dataset.rmNode : focused || selected;
+            const target = findNode(event.target), candidate = target ? target.dataset.rmNode : focused || selected;
+            const current = nodeAllowed(candidate) ? candidate : null;
             if (event.key === 'Enter' || event.key === ' ') {
                 if (current && nodes.has(current)) { event.preventDefault(); selectNode(current); } return;
             }
@@ -470,7 +519,7 @@
             const origin = current && pointById.has(current) ? project(pointById.get(current)) : {x: width / 2, y: (height - AXIS) / 2};
             let nearest = null, score = Infinity;
             pointById.forEach(function (point, id) {
-                if (id === current) return;
+                if (id === current || !nodeAllowed(id)) return;
                 const candidate = project(point), dx = candidate.x - origin.x, dy = candidate.y - origin.y;
                 const ahead = dx * direction[0] + dy * direction[1], side = Math.abs(dx * direction[1] - dy * direction[0]);
                 if (ahead < 2) return;
@@ -509,10 +558,11 @@
                 localLinks.forEach(function (items, id) {
                     localLinks.set(id, new Set(items.slice().sort(function (a, b) { return b.weight - a.weight || a.id.localeCompare(b.id); }).slice(0, 6).map(function (link) { return link.id; })));
                 });
-                if (!nodes.has(selected)) selected = null; if (!links.has(selectedLink)) selectedLink = null;
+                if (!nodeAllowed(selected)) selected = null; if (!linkAllowed(links.get(selectedLink))) selectedLink = null;
                 buildPositions(); build(); buildAxis(); startView();
             },
             setSelection: setSelection,
+            setFilter: setFilter,
             setHighlight: function (ids) { highlighted = ids == null ? null : new Set(ids); paint(); },
             focus: focus,
             overview: fit,

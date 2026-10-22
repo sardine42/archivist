@@ -147,6 +147,76 @@ class RecommendationNetworkTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in result["relations"]], ["valid"])
         self.assertEqual(result["links"][0]["relation_ids"], ["valid"])
 
+    def test_citations_count_distinct_in_scope_sources_and_preserve_evidence(self):
+        evidence = [
+            relation("valid-1", "a", "b"),
+            relation("duplicate-report", "a", "b"),
+            relation("valid-2", "c", "b"),
+            relation("opposite-direction", "b", "a"),
+            relation("self", "b", "b"),
+            relation("comparison", "d", "b", "comparison"),
+            relation("outside-llm", "llm", "b"),
+            relation("outside-unread", "unread", "b"),
+            relation("outside-missing", "missing", "b"),
+        ]
+        result = project([
+            paper("a"), paper("b"), paper("c"), paper("d"),
+            paper("llm", category=["llm"]), paper("unread", read=False),
+        ], evidence)
+        nodes = {node["id"]: node for node in result["nodes"]}
+
+        self.assertEqual(nodes["b"]["citation_count"], 2)
+        self.assertEqual(nodes["b"]["citing_paper_ids"], ["a", "c"])
+        self.assertEqual(nodes["a"]["citation_count"], 1)
+        self.assertEqual(nodes["a"]["citing_paper_ids"], ["b"])
+        self.assertEqual(nodes["c"]["citation_count"], 0)
+        self.assertEqual(nodes["d"]["citing_paper_ids"], [])
+        self.assertEqual(result["stats"]["max_citation_count"], 2)
+        self.assertEqual({item["id"] for item in result["relations"]}, {
+            "valid-1", "duplicate-report", "valid-2", "opposite-direction", "self", "comparison",
+        })
+
+    def test_citing_papers_are_newest_first_with_stable_ties_and_missing_dates_last(self):
+        nodes = [
+            paper("target"),
+            paper("older", published="2023-01-01"),
+            paper("new-b", published="2026-10-21"),
+            paper("new-a", published="2026-10-21"),
+            paper("unknown", published=""),
+            paper("invalid", published="not-a-date"),
+        ]
+        result = project(nodes, [relation(node["id"], node["id"], "target") for node in nodes[1:]])
+        target = next(node for node in result["nodes"] if node["id"] == "target")
+
+        self.assertEqual(target["citation_count"], 5)
+        self.assertEqual(target["citing_paper_ids"], ["new-a", "new-b", "older", "invalid", "unknown"])
+
+    def test_citation_thresholds_use_global_nearest_rank_quantiles(self):
+        nodes = [paper(f"n{i:03d}") for i in range(101)]
+        # The sorted counts end in 2, 4, 6, 8, 10, 12. Nearest-rank
+        # quantiles select index 95 for p95 and index 99 for p99.
+        evidence = [
+            relation(f"r{target}-{source}", f"n{source:03d}", f"n{target:03d}")
+            for target, count in zip(range(95, 101), [2, 4, 6, 8, 10, 12])
+            for source in range(count)
+        ]
+        result = project(nodes, evidence)
+
+        self.assertEqual(result["stats"]["max_citation_count"], 12)
+        self.assertEqual(result["stats"]["citation_emphasis_threshold"], 2)
+        self.assertEqual(result["stats"]["citation_major_threshold"], 10)
+        self.assertEqual(result["version"], 1)
+
+    def test_uncited_and_empty_networks_do_not_emphasize_zero_counts(self):
+        for nodes in ([], [paper("a")], [paper("a"), paper("b")]):
+            with self.subTest(paper_count=len(nodes)):
+                result = project(nodes)
+                self.assertEqual(result["stats"]["max_citation_count"], 0)
+                self.assertEqual(result["stats"]["citation_emphasis_threshold"], 1)
+                self.assertEqual(result["stats"]["citation_major_threshold"], 1)
+                self.assertTrue(all(node["citation_count"] == 0 and node["citing_paper_ids"] == []
+                                    for node in result["nodes"]))
+
     def test_output_is_deterministic_when_input_order_changes(self):
         nodes = [
             paper("a", published="2025-03-01", tags=["semantic-id", "rl"]),

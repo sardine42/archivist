@@ -50,9 +50,9 @@
     transition: opacity .12s;
 }
 .rm-map .rm-node[hidden] { display: none; }
-.rm-node > svg { position: absolute; left: 1px; top: 1px; width: 28px; height: 28px; overflow: visible; pointer-events: none; }
+.rm-node > svg { position: absolute; left: -9px; top: -9px; width: 48px; height: 48px; overflow: visible; pointer-events: none; }
 .rm-node-background { fill: var(--rm-background); }
-.rm-type-ring { fill: none; stroke-width: 2.6px; }
+.rm-type-ring { fill: none; stroke-width: 2.4px; }
 .rm-node-core { fill: var(--rm-core); }
 .rm-node-outline { fill: none; stroke: var(--rm-outline); stroke-width: 1.15px; opacity: 0; }
 .rm-node.rm-highlight .rm-node-outline, .rm-node:hover .rm-node-outline, .rm-node:focus-visible .rm-node-outline { opacity: .9; }
@@ -67,14 +67,14 @@
     color: var(--rm-ink);
     background: var(--rm-background);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
-    font-weight: 500;
+    font-weight: var(--rm-label-weight, 450);
     line-height: 1.3;
     overflow-wrap: anywhere;
     white-space: normal;
     pointer-events: auto;
     text-align: center;
 }
-.rm-node.rm-selected .rm-node-name { font-weight: 650; }
+.rm-node.rm-selected .rm-node-name { font-weight: var(--rm-selected-label-weight, 650); }
 .rm-time-axis {
     position: absolute;
     z-index: 2;

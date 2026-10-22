@@ -30,6 +30,14 @@
 .gx-panel-title { font-size: 19px; font-weight: 550; line-height: 1.6; letter-spacing: -.2px; margin: 0 0 10px; overflow-wrap: anywhere; }
 .gx-panel-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; font-size: 11px; color: #8b938e; }
 .gx-panel-meta time { font-variant-numeric: tabular-nums; }
+.gx-citation-toggle { border: 1px solid #e3e8e3; border-radius: 5px; padding: 4px 8px; background: #f6f8f6; color: #4f6356; font: inherit; cursor: pointer; }
+.gx-citation-toggle:hover, .gx-citation-toggle[aria-expanded="true"] { background: #edf2ed; border-color: #b8c6bb; }
+.gx-citation-count { color: #8b938e; }
+.gx-citations { padding: 15px 0 5px; }
+.gx-citer-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 22px; list-style: none; padding: 0; margin: 0; }
+.gx-citer-list li { min-width: 0; }
+.gx-citer-link { text-decoration: none; }
+.gx-citer-link:hover { text-decoration: none; }
 .gx-summary { margin: 13px 0; font-size: 13px; color: #69756d; line-height: 1.9; }
 .gx-panel-links { display: flex; flex-wrap: wrap; gap: 17px; margin-top: 17px; font-size: 12px; }
 .gx-panel-links a { color: #65766b; }

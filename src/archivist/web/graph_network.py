@@ -239,6 +239,52 @@ def _select_links(links: list[dict], ids: list[str]) -> tuple[set[str], set[str]
     return layout_ids | visible, visible
 
 
+def _citation_statistics(nodes: list[dict], relations: list[dict]) -> dict:
+    """Count distinct citing papers within the complete published network.
+
+    Counts belong to the graph data, so filtering its display does not change
+    a paper's influence. Experimental comparisons and self-citations do not
+    contribute; multiple evidence records from one paper count only once.
+    Visual emphasis uses full-network p95 and p99 nearest-rank thresholds.
+    """
+    by_id = {node["id"]: node for node in nodes}
+    cited_by = defaultdict(set)
+    for relation in relations:
+        source, target = relation.get("source"), relation.get("target")
+        if (relation.get("type") == "citation" and source != target and
+                source in by_id and target in by_id):
+            cited_by[target].add(source)
+
+    publication_days = {
+        node_id: _day(node.get("published_date")) for node_id, node in by_id.items()
+    }
+
+    def citing_order(node_id: str) -> tuple:
+        published = publication_days[node_id]
+        return (published is None, -published.toordinal() if published else 0, node_id)
+
+    for node in nodes:
+        node["citing_paper_ids"] = sorted(cited_by[node["id"]], key=citing_order)
+        node["citation_count"] = len(node["citing_paper_ids"])
+
+    counts = sorted(node["citation_count"] for node in nodes)
+
+    def threshold(quantile: float) -> int:
+        # Use nearest-rank quantiles for every archive size; a minimum of one
+        # prevents an uncited archive from emphasizing all nodes.
+        if not counts:
+            return 1
+        index = max(0, min(len(counts) - 1, math.ceil(len(counts) * quantile) - 1))
+        return max(1, counts[index])
+
+    emphasis = threshold(0.95)
+    return {
+        "max_citation_count": counts[-1] if counts else 0,
+        "citation_emphasis_threshold": emphasis,
+        "citation_major_threshold": max(emphasis, threshold(0.99)),
+    }
+
+
 def prepare_recommendation_network(explorer: dict) -> dict:
     """Build a read-only, complete recommendation-domain network for the UI."""
     all_nodes = explorer.get("nodes", [])
@@ -254,6 +300,7 @@ def prepare_recommendation_network(explorer: dict) -> dict:
     relations = [dict(relation) for relation in explorer.get("relations", [])
                  if relation.get("source") in by_id and relation.get("target") in by_id]
     relations.sort(key=lambda relation: relation["id"])
+    citation_stats = _citation_statistics(nodes, relations)
     real_by_pair = defaultdict(list)
     relation_degree = Counter()
     for relation in relations:
@@ -318,6 +365,7 @@ def prepare_recommendation_network(explorer: dict) -> dict:
         "links": links,
         "topics": [{"id": tag, "label": tag, "count": count} for tag, count in sorted(tag_counts.items())],
         "stats": {
+            **citation_stats,
             "read_papers": len(nodes),
             "links": len(links),
             "visible_links": len(visible_ids),

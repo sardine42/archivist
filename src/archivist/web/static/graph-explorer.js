@@ -11,6 +11,7 @@
     let network, map, nodes, links, relations, linksByNode;
     let selected = null, selectedLink = null, activeTopic = '', activeCompany = '', detailMode = null;
     let searchMatches = [], searchIndex = -1;
+    let citationsOpen = false, citationsExpanded = false;
 
     function el(tag, className, value) {
         const item = document.createElement(tag);
@@ -70,6 +71,51 @@
         if (node.title !== label(node)) row.append(el('span', 'gx-row-description', node.title));
         if (description) row.append(el('span', 'gx-row-relation', description));
         return row;
+    }
+    function citationDetails(node) {
+        const count = Math.max(0, Number(node.citation_count) || 0);
+        const citing = (node.citing_paper_ids || []).map(function (id) { return nodes.get(id); }).filter(Boolean);
+        const body = el('div', 'gx-citations');
+        body.id = 'gx-citing-papers';
+        body.hidden = !citationsOpen;
+        const text = '图谱内被引 ' + count + ' 篇';
+        if (!citing.length) return {trigger: el('span', 'gx-citation-count', text), body: body};
+        const toggle = button(text, 'gx-citation-toggle', function () {
+            citationsOpen = !citationsOpen;
+            body.hidden = !citationsOpen;
+            toggle.setAttribute('aria-expanded', String(citationsOpen));
+        });
+        toggle.title = '基于图谱内已收录的引用关系，按引用论文去重统计';
+        toggle.setAttribute('aria-controls', body.id);
+        toggle.setAttribute('aria-expanded', String(citationsOpen));
+        function fill() {
+            body.replaceChildren();
+            const list = el('ul', 'gx-citer-list');
+            list.setAttribute('aria-label', '引用这篇论文的研究');
+            citing.slice(0, citationsExpanded ? citing.length : 12).forEach(function (paper) {
+                const item = el('li', '');
+                const link = el('a', 'gx-node-row gx-citer-link');
+                link.href = paper.reading_url;
+                const top = el('span', 'gx-row-top');
+                top.append(el('span', 'gx-row-title', label(paper)), el('time', 'gx-row-date', date(paper)));
+                link.append(top);
+                if (paper.title !== label(paper)) link.append(el('span', 'gx-row-description', paper.title));
+                item.append(link);
+                list.append(item);
+            });
+            body.append(list);
+            if (!citationsExpanded && citing.length > 12) {
+                const more = button('展开全部 ' + citing.length + ' 篇引用论文', 'gx-more', function () {
+                    const keepFocus = document.activeElement === more;
+                    citationsExpanded = true;
+                    fill();
+                    if (keepFocus) body.querySelectorAll('.gx-citer-link')[12].focus({preventScroll: true});
+                });
+                body.append(more);
+            }
+        }
+        fill();
+        return {trigger: toggle, body: body};
     }
     function setURL(id) {
         const url = new URL(location.href);
@@ -146,7 +192,9 @@
         const meta = el('div', 'gx-panel-meta');
         meta.append(badges(node), el('time', '', date(node)));
         if (node.company) meta.append(el('span', '', node.company));
-        main.append(meta);
+        const citations = citationDetails(node);
+        meta.append(citations.trigger);
+        main.append(meta, citations.body);
         if (node.summary) main.append(el('p', 'gx-summary', node.summary));
         if (node.tags.length) main.append(tags(node.tags));
         const actions = el('div', 'gx-panel-links');
@@ -229,6 +277,8 @@
         if (!node || !matchesCompany(node)) return;
         selected = id;
         selectedLink = null;
+        citationsOpen = false;
+        citationsExpanded = false;
         detailMode = 'node';
         hideSearch();
         map.setSelection(id);
@@ -240,6 +290,8 @@
         if (!links.has(id)) return;
         selected = null;
         selectedLink = id;
+        citationsOpen = false;
+        citationsExpanded = false;
         detailMode = 'link';
         map.setSelection(null, {linkId: id});
         hideSearch();
@@ -249,6 +301,8 @@
     function clearSelection() {
         selected = null;
         selectedLink = null;
+        citationsOpen = false;
+        citationsExpanded = false;
         detailMode = null;
         map.setSelection(null);
         if (document.activeElement && byId('graphCanvas').contains(document.activeElement)) document.activeElement.blur();

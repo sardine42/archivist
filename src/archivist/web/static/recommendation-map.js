@@ -68,6 +68,19 @@
         let width = 0, height = 0, worldWidth = 2400, worldHeight = 1400, baseZoom = 1;
         let camera = {zoom: 1, x: 0, y: 0}, frame = 0, labelTimer = 0, destroyed = false, pointer = null;
         let initial = true, filterChanged = false, nodeViews = new Map(), edgeViews = [], dates = [], datePositions = [], tickDates = [];
+        let maxCitations = 1, emphasisThreshold = 10, majorThreshold = 34;
+
+        function citationCount(node) {
+            const value = Number(node && node.citation_count);
+            return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+        }
+        function citationRadius(node) {
+            return 7 + 9 * Math.log1p(Math.min(maxCitations, citationCount(node))) / Math.log1p(maxCitations);
+        }
+        function citationTier(node) {
+            const count = citationCount(node);
+            return count >= majorThreshold ? 2 : count >= emphasisThreshold ? 1 : 0;
+        }
 
         function nodeAllowed(id) { return nodes.has(id) && (!filtered || filtered.has(id)); }
         function linkAllowed(link) { return link && nodeAllowed(link.source) && nodeAllowed(link.target); }
@@ -128,8 +141,8 @@
             const vertical = Math.max(camera.zoom, baseZoom);
             return {x: point.x * camera.zoom + camera.x, y: (point.y - worldHeight / 2) * vertical + worldHeight / 2 * camera.zoom + camera.y};
         }
-        function labelSize(value, size) {
-            measure.font = '650 ' + size + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif';
+        function labelSize(value, size, weight) {
+            measure.font = weight + ' ' + size + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif';
             const maximum = 190, raw = measure.measureText(value).width;
             if (raw <= maximum) return {w: Math.ceil(raw) + 6, h: Math.ceil(size * 1.3) + 2};
             let row = '', rowWidth = 0, lines = 1;
@@ -155,46 +168,49 @@
             baseZoom = Math.max(.1, Math.min(1.2, (width - PADDING * 2) / Math.min(worldWidth, 1920)));
             const usableHeight = Math.max(300, height - AXIS - PADDING * 2);
             worldHeight = Math.max(600, usableHeight / baseZoom);
-            const minDistance = 28 / baseZoom, minHorizontal = 14 / overviewZoom(), minVertical = 14 / baseZoom;
-            const occupied = grid(minDistance), overviewOccupied = grid(Math.max(minHorizontal, minVertical));
+            const minDistance = 28 / baseZoom, overview = overviewZoom();
+            const occupied = grid(minDistance), overviewOccupied = grid(28 / overview);
             pointById = new Map();
-            network.nodes.slice().sort(function (a, b) { return a.x - b.x || a.y - b.y || a.id.localeCompare(b.id); }).forEach(function (node) {
+            network.nodes.slice().sort(function (a, b) { return citationCount(b) - citationCount(a) || a.x - b.x || a.y - b.y || a.id.localeCompare(b.id); }).forEach(function (node) {
                 const x = clamp(Number(node.x) || 0, 0, 1) * (worldWidth - 100) + 50;
                 const original = clamp(Number(node.y) || 0, 0, 1) * (worldHeight - 100) + 50;
+                const radius = citationRadius(node), half = (radius + 6) / baseZoom;
+                const overviewHalfX = (radius * .5 + 4) / overview, overviewHalfY = (radius * .5 + 4) / baseZoom;
+                const padding = Math.max(half, overviewHalfY);
                 let y = original, found = false;
                 for (let distance = 0; distance < worldHeight; distance += minDistance / 5) {
                     for (const sign of [1, -1]) {
                         const candidate = original + distance * sign;
-                        if (candidate < 25 || candidate > worldHeight - 25) continue;
-                        const box = {id: node.id, x: x - minDistance / 2, y: candidate - minDistance / 2, w: minDistance, h: minDistance};
-                        const overviewBox = {id: node.id, x: x - minHorizontal / 2, y: candidate - minVertical / 2, w: minHorizontal, h: minVertical};
+                        if (candidate < padding || candidate > worldHeight - padding) continue;
+                        const box = {id: node.id, x: x - half, y: candidate - half, w: half * 2, h: half * 2};
+                        const overviewBox = {id: node.id, x: x - overviewHalfX, y: candidate - overviewHalfY, w: overviewHalfX * 2, h: overviewHalfY * 2};
                         if (!occupied.collides(box, 0) && !overviewOccupied.collides(overviewBox, 0)) { y = candidate; found = true; break; }
                     }
                     if (found) break;
                 }
                 const point = {id: node.id, x: x, y: y};
                 pointById.set(node.id, point);
-                occupied.add({id: node.id, x: x - minDistance / 2, y: y - minDistance / 2, w: minDistance, h: minDistance});
-                overviewOccupied.add({id: node.id, x: x - minHorizontal / 2, y: y - minVertical / 2, w: minHorizontal, h: minVertical});
+                occupied.add({id: node.id, x: x - half, y: y - half, w: half * 2, h: half * 2});
+                overviewOccupied.add({id: node.id, x: x - overviewHalfX, y: y - overviewHalfY, w: overviewHalfX * 2, h: overviewHalfY * 2});
             });
         }
         function decorate(button, node) {
-            const image = svg('svg', {viewBox: '0 0 30 30', 'aria-hidden': 'true'});
-            image.append(svg('circle', {cx: 15, cy: 15, r: 8.5, 'class': 'rm-node-background'}));
+            const radius = citationRadius(node), image = svg('svg', {viewBox: '0 0 48 48', 'aria-hidden': 'true'});
+            image.append(svg('circle', {cx: 24, cy: 24, r: radius, 'class': 'rm-node-background'}));
             let categories = Array.from(new Set(Array.isArray(node.category) ? node.category : [node.category])).filter(function (type) { return COLORS[type]; });
             if (!categories.length) categories = ['other'];
-            const circumference = 2 * Math.PI * 8.5;
+            const circumference = 2 * Math.PI * radius;
             categories.forEach(function (type, index) {
-                const attrs = {cx: 15, cy: 15, r: 8.5, stroke: COLORS[type], 'class': 'rm-type-ring', 'data-category': type};
+                const attrs = {cx: 24, cy: 24, r: radius, stroke: COLORS[type], 'class': 'rm-type-ring', 'data-category': type};
                 if (categories.length > 1) {
                     attrs['stroke-dasharray'] = (circumference / categories.length - 1.3) + ' ' + circumference;
                     attrs['stroke-dashoffset'] = -index * circumference / categories.length;
-                    attrs.transform = 'rotate(-90 15 15)';
+                    attrs.transform = 'rotate(-90 24 24)';
                 }
                 image.append(svg('circle', attrs));
             });
-            image.append(svg('circle', {cx: 15, cy: 15, r: 3.5, 'class': 'rm-node-core'}));
-            image.append(svg('circle', {cx: 15, cy: 15, r: 12.8, 'class': 'rm-node-outline'}));
+            image.append(svg('circle', {cx: 24, cy: 24, r: radius * .43, 'class': 'rm-node-core'}));
+            image.append(svg('circle', {cx: 24, cy: 24, r: radius + 4.2, 'class': 'rm-node-outline'}));
             button.append(image);
         }
         function build() {
@@ -203,8 +219,10 @@
             network.nodes.forEach(function (node, index) {
                 const button = html('button', 'rm-node'), name = html('span', 'rm-node-name');
                 button.type = 'button'; button.dataset.rmNode = node.id; button.tabIndex = index ? -1 : 0;
-                button.setAttribute('aria-label', label(node)); button.setAttribute('aria-pressed', 'false');
-                button.title = label(node) === node.title ? label(node) : label(node) + '\n' + (node.title || '');
+                const count = citationCount(node), cited = '图谱内被引 ' + count + ' 篇';
+                button.dataset.citations = String(count);
+                button.setAttribute('aria-label', label(node) + '，' + cited); button.setAttribute('aria-pressed', 'false');
+                button.title = (label(node) === node.title ? label(node) : label(node) + '\n' + (node.title || '')) + '\n' + cited;
                 decorate(button, node); name.textContent = displayLabel(node); button.append(name); nodeLayer.append(button);
                 nodeViews.set(node.id, {button: button, name: name, point: null, label: null});
             });
@@ -263,8 +281,9 @@
         function edgePath(a, b) {
             if (a.x > b.x || a.x === b.x && a.y > b.y) { const swap = a; a = b; b = swap; }
             const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy) || 1;
-            const radius = Math.min(11 * nodeSize() / 28, length / 3), ax = a.x + dx / length * radius, ay = a.y + dy / length * radius;
-            const bx = b.x - dx / length * radius, by = b.y - dy / length * radius;
+            const sourceRadius = Math.min(a.radius + 2 * nodeScale(), length / 2), targetRadius = Math.min(b.radius + 2 * nodeScale(), length / 2);
+            const ax = a.x + dx / length * sourceRadius, ay = a.y + dy / length * sourceRadius;
+            const bx = b.x - dx / length * targetRadius, by = b.y - dy / length * targetRadius;
             const bend = Math.min(110, Math.abs(dx) * .36);
             return 'M' + ax + ',' + ay + 'C' + (ax + bend) + ',' + ay + ' ' + (bx - bend) + ',' + by + ' ' + bx + ',' + by;
         }
@@ -273,17 +292,22 @@
             scene.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
             nodeViews.forEach(function (view, id) {
                 const point = project(pointById.get(id)); view.point = point;
-                const size = nodeSize(), image = view.button.querySelector('svg');
+                const scale = nodeScale(), size = 48 * scale, image = view.button.querySelector('svg');
+                point.radius = citationRadius(nodes.get(id)) * scale;
+                const buttonSize = Math.max(24, 2 * (point.radius + 5.2 * scale));
+                view.center = buttonSize / 2;
+                view.button.style.width = buttonSize + 'px'; view.button.style.height = buttonSize + 'px';
+                view.button.style.marginLeft = -view.center + 'px'; view.button.style.marginTop = -view.center + 'px';
                 image.style.width = size + 'px'; image.style.height = size + 'px';
-                image.style.left = (30 - size) / 2 + 'px'; image.style.top = (30 - size) / 2 + 'px';
+                image.style.left = (buttonSize - size) / 2 + 'px'; image.style.top = (buttonSize - size) / 2 + 'px';
                 const visible = nodeAllowed(id) && point.x > -220 && point.x < width + 220 && point.y > -140 && point.y < height - AXIS + 140;
                 view.button.hidden = !visible;
                 if (visible) {
                     view.button.style.left = point.x + 'px'; view.button.style.top = point.y + 'px';
                     if (view.label) {
                         const labelBox = view.label;
-                        view.name.style.left = (15 + labelBox.dx - labelBox.w / 2) + 'px';
-                        view.name.style.top = (15 + labelBox.dy - labelBox.h / 2) + 'px';
+                        view.name.style.left = (view.center + labelBox.dx - labelBox.w / 2) + 'px';
+                        view.name.style.top = (view.center + labelBox.dy - labelBox.h / 2) + 'px';
                     }
                 }
             });
@@ -296,32 +320,36 @@
             if (filtered || filterChanged) { updateRovingFocus(); filterChanged = false; }
         }
         function readableScope() { return filtered && filtered.size <= 90; }
-        function nodeSize() { return readableScope() ? 28 : clamp(28 * Math.sqrt(camera.zoom / baseZoom), 14, 34); }
+        function nodeScale() { return readableScope() ? 1 : clamp(Math.sqrt(camera.zoom / baseZoom), .5, 34 / 28); }
         function placeNames() {
             leaderLayer.replaceChildren();
             leaderLayer.style.opacity = '';
             const occupied = grid(48), circles = grid(48), available = [];
-            const relative = camera.zoom / baseZoom, compact = !readableScope() && relative < .65, fontSize = readableScope() ? 11 : relative > 1.25 ? 12 : compact ? 9 : 11;
+            const relative = camera.zoom / baseZoom, compact = !readableScope() && relative < .65;
+            const baseFontSize = readableScope() ? 12 : relative > 1.25 ? 13 : compact ? 9 : 12;
             const labelGap = compact ? 2 : 3;
-            const radius = nodeSize() * .44;
             nodeViews.forEach(function (view, id) {
                 if (view.button.hidden) return;
                 const point = view.point;
                 view.name.hidden = point.x < 9 || point.x > width - 9 || point.y < 9 || point.y > height - AXIS - 9;
                 if (view.name.hidden) return;
+                const node = nodes.get(id), radius = point.radius + 3 * nodeScale(), tier = citationTier(node);
+                const fontSize = baseFontSize + (tier === 2 ? 3 : tier === 1 ? 1 : 0), weight = tier === 2 ? 700 : tier === 1 ? 650 : 450;
                 circles.add({id: id, x: point.x - radius, y: point.y - radius, w: radius * 2, h: radius * 2});
-                view.name.textContent = displayLabel(nodes.get(id), compact);
+                view.name.textContent = displayLabel(node, compact);
                 view.name.style.fontSize = fontSize + 'px';
-                const size = labelSize(displayLabel(nodes.get(id), compact), fontSize);
+                view.name.style.setProperty('--rm-label-weight', String(weight));
+                view.name.style.setProperty('--rm-selected-label-weight', String(Math.max(650, weight)));
+                const size = labelSize(displayLabel(node, compact), fontSize, Math.max(650, weight));
                 view.name.style.width = size.w + 'px';
-                available.push({id: id, view: view, point: point, size: size});
+                available.push({id: id, view: view, point: point, size: size, citations: citationCount(node), radius: radius});
             });
-            // Date order makes label placement stable when selection or filters change.
-            available.sort(function (a, b) { return b.point.x - a.point.x || a.point.y - b.point.y || a.id.localeCompare(b.id); });
+            // Citation counts belong to the full graph, so filtering never changes label priority.
+            available.sort(function (a, b) { return b.citations - a.citations || b.point.x - a.point.x || a.point.y - b.point.y || a.id.localeCompare(b.id); });
             available.forEach(function (item) {
-                const p = item.point, size = item.size, w = size.w, h = size.h;
-                const offsets = [[0, 15 + h / 2], [0, -15 - h / 2], [15 + w / 2, 0], [-15 - w / 2, 0], [w / 2 + 9, 18 + h / 2], [-w / 2 - 9, -18 - h / 2]];
-                for (let radius = 36; radius <= 216; radius += 12) {
+                const p = item.point, size = item.size, w = size.w, h = size.h, clearance = item.radius + 5;
+                const offsets = [[0, clearance + h / 2], [0, -clearance - h / 2], [clearance + w / 2, 0], [-clearance - w / 2, 0], [w / 2 + clearance, clearance + h / 2], [-w / 2 - clearance, -clearance - h / 2]];
+                for (let radius = Math.max(36, clearance + 12); radius <= 228; radius += 12) {
                     for (let step = 0; step < 16; step++) {
                         const angle = Math.PI / 8 * step;
                         offsets.push([Math.cos(angle) * (radius + w * .18), Math.sin(angle) * (radius + h * .1)]);
@@ -350,14 +378,15 @@
                         }
                     }
                 }
-                if (!chosen) chosen = fallback || {dx: 0, dy: 16 + h / 2, w: w, h: h, box: {x: p.x - w / 2, y: p.y + 16, w: w, h: h}};
+                if (!chosen) chosen = fallback || {dx: 0, dy: clearance + h / 2, w: w, h: h, box: {x: p.x - w / 2, y: p.y + clearance, w: w, h: h}};
                 item.view.label = chosen;
-                item.view.name.style.left = (15 + chosen.dx - w / 2) + 'px';
-                item.view.name.style.top = (15 + chosen.dy - h / 2) + 'px';
+                item.view.name.style.left = (item.view.center + chosen.dx - w / 2) + 'px';
+                item.view.name.style.top = (item.view.center + chosen.dy - h / 2) + 'px';
                 occupied.add(chosen.box);
-                if (Math.hypot(chosen.dx, chosen.dy) > Math.max(34, h / 2 + 18)) {
+                if (Math.hypot(chosen.dx, chosen.dy) > Math.max(34, h / 2 + clearance + 5)) {
                     const endX = clamp(p.x, chosen.box.x, chosen.box.x + w), endY = clamp(p.y, chosen.box.y, chosen.box.y + h);
-                    const leader = svg('path', {d: 'M' + p.x + ',' + p.y + 'L' + endX + ',' + endY, 'class': 'rm-name-leader', 'data-rm-node-leader': item.id});
+                    const dx = endX - p.x, dy = endY - p.y, distance = Math.hypot(dx, dy) || 1, start = p.radius + 2 * nodeScale();
+                    const leader = svg('path', {d: 'M' + (p.x + dx / distance * start) + ',' + (p.y + dy / distance * start) + 'L' + endX + ',' + endY, 'class': 'rm-name-leader', 'data-rm-node-leader': item.id});
                     if (item.view.button.classList.contains('rm-dim')) leader.setAttribute('stroke-opacity', '.08');
                     leaderLayer.append(leader);
                 }
@@ -548,6 +577,10 @@
         return {
             render: function (value) {
                 network = value || {nodes: [], links: []}; network.nodes = network.nodes || []; network.links = network.links || [];
+                const stats = network.stats || {}, observedMax = Math.max.apply(null, [1].concat(network.nodes.map(citationCount)));
+                maxCitations = Math.max(observedMax, Number(stats.max_citation_count) || 0, 1);
+                emphasisThreshold = Math.max(1, Number(stats.citation_emphasis_threshold) || 10);
+                majorThreshold = Math.max(emphasisThreshold, Number(stats.citation_major_threshold) || 34);
                 nodes = new Map(network.nodes.map(function (node) { return [node.id, node]; }));
                 links = new Map(network.links.map(function (link) { return [link.id, link]; }));
                 localLinks = new Map(network.nodes.map(function (node) { return [node.id, []]; }));

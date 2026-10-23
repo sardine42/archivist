@@ -1,0 +1,81 @@
+/* A quiet, private message box shared by the archive pages. */
+.mailbox {
+    --mailbox-edge: max(20px, env(safe-area-inset-right));
+    --mailbox-bottom: max(20px, env(safe-area-inset-bottom));
+    position: fixed;
+    right: var(--mailbox-edge);
+    bottom: var(--mailbox-bottom);
+    z-index: 80;
+    color: var(--ink, #202733);
+    font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.mailbox [hidden] { display: none !important; }
+.mailbox button { font: inherit; cursor: pointer; }
+.mailbox-trigger {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid #e2e5e8;
+    border-radius: 9px;
+    background: #fffffff5;
+    color: #858c94;
+    box-shadow: 0 2px 8px #20273305;
+}
+.mailbox-trigger:hover, .mailbox-trigger[aria-expanded="true"] { border-color: #bdc3ca; color: #525d69; }
+.mailbox :focus-visible { outline: 2px solid #8292a6; outline-offset: 3px; }
+.mailbox-panel {
+    position: absolute;
+    right: 0;
+    bottom: 47px;
+    width: 340px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - 100px - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    padding: 17px 18px 16px;
+    border: 1px solid var(--line, #e0e4ea);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 8px 32px #20273312;
+}
+.mailbox-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
+.mailbox-header h2 { margin: 0; font-size: 13px; font-weight: 550; line-height: 24px; color: #4c5663; }
+.mailbox-close { display: grid; place-items: center; width: 24px; height: 24px; margin-right: -4px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #8b929c; }
+.mailbox-close:hover { color: #4c5663; background: #f4f5f7; }
+.mailbox textarea {
+    display: block;
+    width: 100%;
+    min-height: 126px;
+    max-height: 280px;
+    resize: vertical;
+    padding: 10px 11px;
+    border: 1px solid #dfe3e8;
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink, #202733);
+    font: inherit;
+    line-height: 1.8;
+    overflow-wrap: anywhere;
+}
+.mailbox textarea::placeholder { color: #a0a6ae; }
+.mailbox textarea:focus { border-color: #97a5b7; outline: 0; box-shadow: 0 0 0 2px #8292a612; }
+.mailbox textarea[aria-invalid="true"] { border-color: #bb867b; }
+.mailbox-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 11px; }
+.mailbox-count { color: #949ba5; font-size: 11px; font-variant-numeric: tabular-nums; }
+.mailbox-count.is-over-limit { color: #a46050; }
+.mailbox-submit { border: 1px solid #dce1e7; border-radius: 5px; padding: 5px 11px; background: #f5f6f8; color: #536071; font-size: 12px !important; }
+.mailbox-submit:hover:enabled { border-color: #b5bec9; background: #eef1f5; }
+.mailbox-submit:disabled { opacity: .45; cursor: default; }
+.mailbox-status-row { display: flex; align-items: baseline; gap: 8px; }
+.mailbox-status-row:has(.mailbox-status:empty):has(.mailbox-retry[hidden]) { display: none; }
+.mailbox-status { margin: 11px 0 0; color: #7f8792; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.mailbox-status.is-error { color: #9b6358; }
+.mailbox-retry { flex: none; border: 0; padding: 0; background: transparent; color: #64758a; font-size: 11px !important; text-decoration: underline; text-underline-offset: 3px; }
+.mailbox-sr-only, .mailbox-honeypot { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (max-width: 650px) {
+    .mailbox { --mailbox-edge: max(18px, env(safe-area-inset-right)); --mailbox-bottom: max(18px, env(safe-area-inset-bottom)); }
+    .mailbox-panel { max-width: calc(100vw - 36px - env(safe-area-inset-right)); }
+    .mailbox textarea { font-size: 16px; }
+}
+@media print { .mailbox { display: none; } }

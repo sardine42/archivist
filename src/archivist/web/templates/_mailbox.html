@@ -1,0 +1,38 @@
+<div class="mailbox" id="mailboxWidget" data-max-length="500">
+    <button class="mailbox-trigger" id="mailboxTrigger" type="button"
+        title="留言信箱" aria-label="留言信箱" aria-haspopup="dialog"
+        aria-controls="mailboxPanel" aria-expanded="false">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3.5" y="5.5" width="17" height="13" rx="2" stroke="currentColor" stroke-width="1.35" />
+            <path d="m4.5 7 7.5 6 7.5-6" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+    </button>
+    <section class="mailbox-panel" id="mailboxPanel" role="dialog" aria-modal="false"
+        aria-labelledby="mailboxTitle" hidden>
+        <div class="mailbox-header">
+            <h2 id="mailboxTitle">留言信箱</h2>
+            <button class="mailbox-close" id="mailboxClose" type="button" aria-label="关闭留言信箱">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="m5 5 10 10M15 5 5 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                </svg>
+            </button>
+        </div>
+        <form id="mailboxForm" novalidate>
+            <label class="mailbox-sr-only" for="mailboxMessage">留言内容</label>
+            <textarea id="mailboxMessage" name="message" rows="5" placeholder="给站主留言…"
+                aria-describedby="mailboxCount mailboxStatus" required></textarea>
+            <div class="mailbox-honeypot" aria-hidden="true" inert>
+                <label for="mailboxWebsite">Website</label>
+                <input id="mailboxWebsite" name="website" type="text" tabindex="-1" autocomplete="off">
+            </div>
+            <div class="mailbox-footer">
+                <span class="mailbox-count" id="mailboxCount">0 / 500</span>
+                <button class="mailbox-submit" id="mailboxSubmit" type="submit" disabled>发送留言</button>
+            </div>
+            <div class="mailbox-status-row">
+                <p class="mailbox-status" id="mailboxStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+                <button class="mailbox-retry" id="mailboxRetry" type="button" hidden>重试</button>
+            </div>
+        </form>
+    </section>
+</div>

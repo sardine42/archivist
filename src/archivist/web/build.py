@@ -50,6 +50,8 @@ def build_site(output_dir: Path) -> None:
     for key, filename in {
         "article_content_css_version": "article-content.css",
         "article_content_js_version": "article-content.js",
+        "mailbox_css_version": "mailbox.css",
+        "mailbox_js_version": "mailbox.js",
         "reading_list_css_version": "reading-list.css",
         "reading_detail_css_version": "reading-detail.css",
         "reading_detail_js_version": "reading-detail.js",
@@ -67,6 +69,18 @@ def build_site(output_dir: Path) -> None:
     # Copy static assets
     static_out = output_dir / "static"
     shutil.copytree(STATIC_DIR, static_out)
+
+    # Read-only config can be mirrored on static origins. All message POSTs
+    # must reach the single owning service so capacity is global.
+    from archivist.services.mailbox import get_mailbox_settings
+    mailbox_settings = get_mailbox_settings()
+    mailbox_dir = output_dir / "api" / "mailbox"
+    mailbox_dir.mkdir(parents=True, exist_ok=True)
+    (mailbox_dir / "config").write_text(json.dumps({
+        "enabled": mailbox_settings.enabled,
+        "max_length": mailbox_settings.max_length,
+        "max_messages": mailbox_settings.max_messages,
+    }, separators=(",", ":")), encoding="utf-8")
 
     # Load all papers — only those with reading.md (skip brief-only)
     papers = list_papers()

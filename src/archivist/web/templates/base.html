@@ -6,6 +6,8 @@
     <title>{% block title %}Archivist{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ css_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='article-content.css') }}?v={{ article_content_css_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='mailbox.css') }}?v={{ mailbox_css_version }}">
+    <script defer src="{{ url_for('static', filename='mailbox.js') }}?v={{ mailbox_js_version }}"></script>
     <!-- KaTeX -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -35,5 +37,6 @@
     <main class="main">
         {% block content %}{% endblock %}
     </main>
+    {% include '_mailbox.html' %}
 </body>
 </html>

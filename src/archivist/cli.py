@@ -1276,5 +1276,10 @@ def stats():
     click.echo(f"Total:           {read_count + brief_count + doc_count}")
 
 
+from archivist.mailbox_cli import mailbox
+
+cli.add_command(mailbox)
+
+
 if __name__ == "__main__":
     cli()

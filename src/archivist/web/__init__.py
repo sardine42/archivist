@@ -38,6 +38,8 @@ def create_app(mode: str = "dev") -> Flask:
             "css_version": static_asset_version("style.css"),
             "article_content_css_version": static_asset_version("article-content.css"),
             "article_content_js_version": static_asset_version("article-content.js"),
+            "mailbox_css_version": static_asset_version("mailbox.css"),
+            "mailbox_js_version": static_asset_version("mailbox.js"),
             "paper_search_version": static_asset_version("paper-search.js"),
             "reading_list_css_version": static_asset_version("reading-list.css"),
             "reading_detail_css_version": static_asset_version("reading-detail.css"),
@@ -57,6 +59,8 @@ def create_app(mode: str = "dev") -> Flask:
     app.register_blueprint(reading_bp)
     from archivist.web.routes.site import site_bp
     app.register_blueprint(site_bp)
+    from archivist.web.mailbox import register_mailbox
+    register_mailbox(app)
 
     # Root redirect
     @app.route("/")

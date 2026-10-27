@@ -41,9 +41,9 @@
             <span class="sub-tab-label">报告</span>
             <span class="sub-tab-count">{{ digest_count or 0 }}</span>
         </a>
-        <a href="/docs/" class="sub-tab">
+        <a href="/docs/" class="sub-tab" data-admin-doc-link hidden>
             <span class="sub-tab-label">个人文档</span>
-            <span class="sub-tab-count">{{ doc_count or 0 }}</span>
+            <span class="sub-tab-count" data-admin-doc-count></span>
         </a>
     </div>
 
@@ -143,7 +143,7 @@
             {% endfor %}
             <label class="filter-field list-sort"><span class="filter-label">排序</span>
                 <select id="sortSelect" class="sort-select">
-                    {% for value, label in [('published_date', '发布日期 ↓'), ('date_added', '归档时间 ↓'), ('reading_score', '精读评分 ↓'), ('score', '摘要评分 ↓'), ('rating', '用户评分 ↓')] %}
+                    {% for value, label in [('published_date', '发布日期 ↓'), ('date_added', '归档时间 ↓'), ('reading_score', '精读评分 ↓'), ('score', '摘要评分 ↓')] %}
                     <option value="{{ value }}" {{ 'selected' if sort_by == value }}>{{ label }}</option>
                     {% endfor %}
                 </select>
@@ -162,7 +162,7 @@
              data-slug="{{ p.slug }}" data-model-name="{{ p.model_name or '' }}" data-category="{{ p.category | join(',') }}"
              data-company="{{ item.company }}" data-tags="{{ p.tags | join(',') }}"
              data-published-date="{{ p.published_date }}" data-reading-score="{{ p.reading_score }}"
-             data-score="{{ p.score }}" data-date-added="{{ p.date_added }}" data-rating="{{ p.rating or 0 }}">
+             data-score="{{ p.score }}" data-date-added="{{ p.date_added }}">
             <span class="search-match-label" hidden></span>
             <h2><a href="/reading/{{ p.year }}/{{ p.slug }}/" class="card-title">{{ p.title | paper_title(p.model_name) }}</a></h2>
             {% if p.one_line_summary %}<p class="card-summary">{{ p.one_line_summary }}</p>{% endif %}
@@ -176,7 +176,7 @@
                 <div class="card-scores">
                     <span>精读 <b>{{ '%.0f' | format(p.reading_score) if p.reading_score else '—' }}</b></span>
                     <span>摘要 <b>{{ '%.0f' | format(p.score) if p.score else '—' }}</b></span>
-                    <span>用户 <b>{{ p.rating if p.rating else '—' }}</b></span>
+                    <span data-admin-rating hidden></span>
                 </div>
             </div>
         </article>

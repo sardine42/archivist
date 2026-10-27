@@ -9,8 +9,9 @@ uses the same Pagefind bundle as the static site at ``/search/pagefind/``.
 
 import json
 import mimetypes
+from urllib.parse import urlencode
 
-from flask import Blueprint, Response, abort, render_template, send_file
+from flask import Blueprint, Response, abort, redirect, render_template, request, send_file
 
 from archivist.config import DOCS_DIR
 from archivist.web.data import (
@@ -22,6 +23,28 @@ from archivist.web.data import (
 from archivist.web.routes.reading import _render_markdown
 
 site_bp = Blueprint("site", __name__)
+
+
+@site_bp.before_app_request
+def guard_personal_documents():
+    if request.path == "/docs" or request.path.startswith("/docs/"):
+        from archivist.web.auth import current_admin
+        if current_admin() is None:
+            return redirect("/login/?" + urlencode({"next": request.full_path.rstrip("?")}), code=302)
+
+
+@site_bp.after_app_request
+def private_document_headers(response):
+    if request.path == "/docs" or request.path.startswith("/docs/"):
+        response.headers["Cache-Control"] = "private, no-store"
+        response.vary.add("Cookie")
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@site_bp.route("/login/")
+def login_page():
+    return render_template("login.html")
 
 
 def _json(payload) -> Response:
@@ -92,7 +115,8 @@ def doc_detail(slug: str):
 
 @site_bp.route("/docs/<slug>/figures/<path:filename>")
 def doc_figure(slug: str, filename: str):
-    fig = DOCS_DIR / slug / "figures" / filename
-    if not fig.exists():
+    root = (DOCS_DIR / slug / "figures").resolve()
+    fig = (root / filename).resolve()
+    if not root.is_relative_to(DOCS_DIR.resolve()) or not fig.is_relative_to(root) or not fig.is_file():
         abort(404)
     return send_file(fig)

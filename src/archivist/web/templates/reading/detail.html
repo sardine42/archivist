@@ -39,7 +39,7 @@
 {% block content %}
 {% set has_graph = paper.model_name and ('generative-rec' in paper.category or 'discriminative-rec' in paper.category) %}
 {% set has_related = related.outperforms or related.outperformed_by or appears_in or has_graph %}
-<div class="reading-detail{% if not toc %} rd-without-toc{% endif %}{% if not has_related %} rd-without-refs{% endif %}">
+<div class="reading-detail{% if not toc %} rd-without-toc{% endif %}{% if not has_related %} rd-without-refs{% endif %}" data-private-paper-slug="{{ paper.slug }}">
     <a href="/reading/" class="rd-back">← 论文</a>
 
     <header class="rd-paper-header">
@@ -51,7 +51,7 @@
             <div class="rd-scores" aria-label="论文评分">
                 <span>精读<b>{{ "%.0f" | format(paper.reading_score) if paper.reading_score else "—" }}</b></span>
                 <span>摘要<b>{{ "%.0f" | format(paper.score) if paper.score else "—" }}</b></span>
-                <span>用户<b>{{ paper.rating if paper.rating is not none else "—" }}</b></span>
+                <span data-admin-rating hidden></span>
             </div>
             <div class="rd-sources">
                 {% if paper.url %}<a href="{{ paper.url }}" target="_blank" rel="noopener noreferrer">ArXiv ↗</a>{% endif %}
@@ -74,16 +74,14 @@
                 </div>
             </details>
             {% endif %}
-            {% if paper.score_reason or paper.reading_score_reason or paper.rating_reason %}
-            <details>
+            <details data-admin-score-reasons data-public-reasons="{{ 'true' if paper.score_reason or paper.reading_score_reason else 'false' }}"{% if not paper.score_reason and not paper.reading_score_reason %} hidden{% endif %}>
                 <summary>评分依据</summary>
                 <div class="rd-extra-content">
                     {% if paper.score_reason %}<p><strong>摘要 {{ "%.0f" | format(paper.score) }}：</strong>{{ paper.score_reason }}</p>{% endif %}
                     {% if paper.reading_score_reason %}<p><strong>精读 {{ "%.0f" | format(paper.reading_score) }}：</strong>{{ paper.reading_score_reason }}</p>{% endif %}
-                    {% if paper.rating_reason %}<p><strong>用户 {{ paper.rating if paper.rating is not none else "—" }}：</strong>{{ paper.rating_reason }}</p>{% endif %}
+                    <p data-admin-rating-reason hidden></p>
                 </div>
             </details>
-            {% endif %}
             {% if paper.tags %}
             <div class="rd-visible-tags" aria-label="主题标签">
                 <span class="rd-tag-label">主题</span>

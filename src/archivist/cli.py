@@ -1092,7 +1092,7 @@ def build_site(output: str):
 def deploy_site(output: str, host: str | None, skip_build: bool):
     """Build once and rsync the site and paper figures to all configured hosts."""
     import subprocess
-    from archivist.config import PAPERS_DIR
+    from archivist.config import ARCHIVE_ROOT, PAPERS_DIR
 
     settings = get_deploy_settings()
     target_host = host or settings["host"]
@@ -1116,8 +1116,19 @@ def deploy_site(output: str, host: str | None, skip_build: bool):
         from archivist.web.build import build_site
         build_site(output_path)
 
+    private_export = ARCHIVE_ROOT / "site-private" / "admin-data.json"
+    if not private_export.is_file():
+        raise click.ClickException("private site data is missing; run archivist build before deploying")
+    private_export.chmod(0o600)
+
     for target_host in target_hosts:
         try:
+            # Keep human feedback outside the public document root. Provision
+            # the owner-only site-private directory when setting up an origin.
+            subprocess.run([
+                "rsync", "-az", str(private_export),
+                f"{target_host}:{archive_path}/site-private/admin-data.json",
+            ], check=True)
             # 1) Static site
             click.echo(f"→ rsync {output_path}/ to {target_host}:{site_path}/")
             subprocess.run(

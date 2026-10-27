@@ -1,0 +1,37 @@
+<div class="admin-auth" id="adminAuthWidget">
+    <button class="admin-auth-trigger" id="adminAuthTrigger" type="button"
+        title="管理员登录" aria-label="管理员登录" aria-haspopup="dialog"
+        aria-controls="adminAuthPanel" aria-expanded="false">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="8" r="3.25" stroke="currentColor" stroke-width="1.35" />
+            <path d="M5.5 20v-2.25a6.5 6.5 0 0 1 13 0V20" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" />
+        </svg>
+    </button>
+    <section class="admin-auth-panel" id="adminAuthPanel" role="dialog" aria-modal="false"
+        aria-labelledby="adminAuthTitle" hidden>
+        <div class="admin-auth-header">
+            <h2 id="adminAuthTitle">管理员登录</h2>
+            <button class="admin-auth-close" id="adminAuthClose" type="button" aria-label="关闭登录窗口">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="m5 5 10 10M15 5 5 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                </svg>
+            </button>
+        </div>
+        <form id="adminAuthForm">
+            <label class="admin-auth-label" for="adminAuthUsername">账号</label>
+            <input id="adminAuthUsername" name="username" type="text" autocomplete="username"
+                autocapitalize="none" spellcheck="false" required maxlength="128">
+            <label class="admin-auth-label" for="adminAuthPassword">密码</label>
+            <input id="adminAuthPassword" name="password" type="password" autocomplete="current-password"
+                required maxlength="1024">
+            <div class="admin-auth-actions">
+                <button class="admin-auth-submit" id="adminAuthSubmit" type="submit">登录</button>
+            </div>
+        </form>
+        <div class="admin-auth-account" id="adminAuthAccount" hidden>
+            <p id="adminAuthAccountName"></p>
+            <button class="admin-auth-submit" id="adminAuthLogout" type="button">退出登录</button>
+        </div>
+        <p class="admin-auth-status" id="adminAuthStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+    </section>
+</div>

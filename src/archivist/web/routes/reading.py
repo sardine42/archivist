@@ -9,6 +9,7 @@ from flask import Blueprint, abort, redirect, render_template, request, send_fil
 from archivist.config import DOCS_DIR, PAPERS_DIR
 from archivist.services.paper_store import get_paper, get_paper_dir, list_papers
 from archivist.services.dag import load_graph
+from archivist.web.privacy import public_paper
 
 reading_bp = Blueprint("reading", __name__, url_prefix="/reading")
 
@@ -224,11 +225,10 @@ def _get_related_papers(paper_meta, all_papers_enriched: list, *, index=None) ->
 def paper_list():
     """Paper list page with filters. Supports ?type=papers|digests."""
     doc_type = request.args.get("type", "papers")
-    papers = _load_papers_enriched()
+    papers = [{**item, "meta": public_paper(item["meta"])} for item in _load_papers_enriched()]
 
     # Always load digest counts for sub-tab badges
-    from archivist.web.data import load_docs, prepare_digests_data
-    doc_count = len(load_docs(DOCS_DIR))
+    from archivist.web.data import prepare_digests_data
     digests = prepare_digests_data()
     digest_count = len(digests["daily"]) + len(digests["weekly"]) + len(digests["monthly"])
 
@@ -238,7 +238,6 @@ def paper_list():
             doc_type="digests",
             total=len(papers),
             digest_count=digest_count,
-            doc_count=doc_count,
             daily=digests["daily"],
             weekly=digests["weekly"],
             monthly=digests["monthly"],
@@ -251,12 +250,12 @@ def paper_list():
     tag_list = sorted(load_whitelist())
 
     sort_by = request.args.get("sort", "published_date")
+    if sort_by == "rating":
+        sort_by = "published_date"  # Authenticated feedback sorting happens in the private overlay.
     if sort_by == "reading_score":
         papers.sort(key=lambda p: p["meta"].reading_score, reverse=True)
     elif sort_by == "score":
         papers.sort(key=lambda p: p["meta"].score, reverse=True)
-    elif sort_by == "rating":
-        papers.sort(key=lambda p: p["meta"].rating or 0, reverse=True)
     elif sort_by == "date_added":
         papers.sort(key=lambda p: p["meta"].date_added or "", reverse=True)
     elif sort_by == "published_date":
@@ -272,7 +271,6 @@ def paper_list():
         sort_by=sort_by,
         total=len(papers),
         digest_count=digest_count,
-        doc_count=doc_count,
         latest_daily=digests["daily"][0] if digests["daily"] else None,
     )
 
@@ -295,8 +293,9 @@ def digest_detail(period_type: str, digest_id: str):
 def paper_detail(year: int, slug: str):
     """Paper detail page."""
     paper = get_paper(slug)
-    if not paper:
+    if not paper or paper.year != year:
         abort(404)
+    paper = public_paper(paper)
 
     paper_dir = get_paper_dir(slug)
     if not paper_dir:
@@ -359,10 +358,12 @@ def paper_pdf(year: int, slug: str):
 @reading_bp.route("/<int:year>/<slug>/figures/<path:filename>")
 def paper_figure(year: int, slug: str, filename: str):
     """Serve paper figures."""
+    paper = get_paper(slug)
     paper_dir = get_paper_dir(slug)
-    if not paper_dir:
+    if not paper_dir or not paper or paper.year != year:
         abort(404)
-    fig_file = paper_dir / "figures" / filename
-    if not fig_file.exists():
+    root = (paper_dir / "figures").resolve()
+    fig_file = (root / filename).resolve()
+    if not root.is_relative_to(paper_dir.resolve()) or not fig_file.is_relative_to(root) or not fig_file.is_file():
         abort(404)
     return send_file(fig_file)

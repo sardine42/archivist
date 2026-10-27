@@ -4,7 +4,7 @@
 <div class="reading-list">
     <div class="page-header">
         <h1>Paper Reading</h1>
-        <span class="paper-count">{{ docs | length }} docs</span>
+        <span class="paper-count"><span data-admin-doc-count></span> 份文档</span>
     </div>
 
     <!-- Sub-tabs (same as reading/index.html) -->
@@ -17,10 +17,10 @@
             <span class="sub-tab-icon">📅</span>
             <span class="sub-tab-label">报告</span>
         </a>
-        <a href="/docs/" class="sub-tab active">
+        <a href="/docs/" class="sub-tab active" data-admin-doc-link hidden>
             <span class="sub-tab-icon">🔒</span>
             <span class="sub-tab-label">个人文档</span>
-            <span class="sub-tab-count">{{ docs | length }}</span>
+            <span class="sub-tab-count" data-admin-doc-count></span>
         </a>
     </div>
 

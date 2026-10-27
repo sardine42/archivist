@@ -1,17 +1,20 @@
 """Static site generator: archivist build."""
 
 import json
+import os
 import shutil
+import tempfile
 from pathlib import Path
 
 import markdown
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from archivist.config import PAPERS_DIR, DOCS_DIR
+from archivist.config import ARCHIVE_ROOT, PAPERS_DIR, DOCS_DIR
 from archivist.services.paper_store import list_papers, get_paper_dir
 from archivist.web import static_asset_version
 from archivist.web.data import load_docs
 from archivist.web.titles import format_paper_title
+from archivist.web.privacy import public_paper
 from archivist.web.routes.reading import _normalize_company, _render_markdown, _resolve_wiki_links
 
 import click
@@ -24,6 +27,9 @@ STATIC_DIR = Path(__file__).parent / "static"
 def build_site(output_dir: Path) -> None:
     """Generate the full static site."""
     output_dir = Path(output_dir)
+    private_dir = ARCHIVE_ROOT / "site-private"
+    if private_dir.resolve().is_relative_to(output_dir.resolve()) or output_dir.resolve().is_relative_to(private_dir.resolve()):
+        raise ValueError("Static output must be separate from the private data directory")
 
     # Clean and create output
     if output_dir.exists():
@@ -52,6 +58,8 @@ def build_site(output_dir: Path) -> None:
         "article_content_js_version": "article-content.js",
         "mailbox_css_version": "mailbox.css",
         "mailbox_js_version": "mailbox.js",
+        "admin_auth_css_version": "admin-auth.css",
+        "admin_auth_js_version": "admin-auth.js",
         "reading_list_css_version": "reading-list.css",
         "reading_detail_css_version": "reading-detail.css",
         "reading_detail_js_version": "reading-detail.js",
@@ -84,11 +92,14 @@ def build_site(output_dir: Path) -> None:
 
     # Load all papers — only those with reading.md (skip brief-only)
     papers = list_papers()
+    private_papers = {}
     enriched = []
     for p in papers:
         has_reading = (PAPERS_DIR / str(p.year) / p.slug / "reading.md").exists()
         if not has_reading:
             continue  # Skip brief-only papers from website
+        private_papers[p.slug] = {"rating": p.rating, "rating_reason": p.rating_reason}
+        p = public_paper(p)
         company = _normalize_company(p.affiliations)
         enriched.append({"meta": p, "company": company, "has_reading": True})
 
@@ -140,7 +151,6 @@ def build_site(output_dir: Path) -> None:
         sort_by="published_date",
         total=len(enriched),
         digest_count=digest_count,
-        doc_count=doc_count,
         latest_daily=digests["daily"][0] if digests["daily"] else None,
     )
     (reading_dir / "index.html").write_text(html, encoding="utf-8")
@@ -150,7 +160,6 @@ def build_site(output_dir: Path) -> None:
         doc_type="digests",
         total=len(enriched),
         digest_count=digest_count,
-        doc_count=doc_count,
         daily=digests["daily"],
         weekly=digests["weekly"],
         monthly=digests["monthly"],
@@ -245,6 +254,11 @@ def build_site(output_dir: Path) -> None:
         encoding="utf-8",
     )
 
+    env.globals["request"].path = "/login/"
+    login_dir = output_dir / "login"
+    login_dir.mkdir(exist_ok=True)
+    (login_dir / "index.html").write_text(env.get_template("login.html").render(), encoding="utf-8")
+
     # Graph page
     env.globals["request"].path = "/graph/"
     click.echo("Rendering graph page...")
@@ -304,6 +318,25 @@ def build_site(output_dir: Path) -> None:
             if dst_figures.exists():
                 shutil.rmtree(dst_figures)
             shutil.copytree(src_figures, dst_figures)
+
+    # Archived documents may have owner-only source images. Nginx must be able
+    # to read their published copies after authorizing the request; leave the
+    # original archive and the separate administrator export private.
+    docs_out.chmod(0o755)
+    for published in docs_out.rglob("*"):
+        published.chmod(0o755 if published.is_dir() else 0o644)
+
+    # The API reads this export outside the static root. Publish it atomically
+    # so simultaneous authenticated requests never observe a partial document.
+    private_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    private_dir.chmod(0o700)
+    fd, temporary = tempfile.mkstemp(prefix=".admin-data-", dir=private_dir)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as destination:
+            json.dump({"papers": private_papers, "doc_count": doc_count}, destination, ensure_ascii=False)
+        os.replace(temporary, private_dir / "admin-data.json")
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
     click.echo(f"Built: {rendered} reading pages + {digest_pages} digest pages + {len(all_docs)} docs + graph + benchmark → {output_dir}/")
 

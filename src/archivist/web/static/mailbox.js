@@ -83,6 +83,7 @@
     }
 
     function openPanel() {
+        document.dispatchEvent(new CustomEvent('archivist:corner-open', {detail: 'mailbox'}));
         panel.hidden = false;
         trigger.setAttribute('aria-expanded', 'true');
         message.focus({preventScroll: true});
@@ -110,6 +111,9 @@
         else closePanel(false);
     });
     closeButton.addEventListener('click', function () { closePanel(true); });
+    document.addEventListener('archivist:corner-open', function (event) {
+        if (event.detail !== 'mailbox') closePanel(false);
+    });
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && !panel.hidden) {
             event.preventDefault();

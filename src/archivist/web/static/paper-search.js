@@ -352,6 +352,9 @@ searchRetry.addEventListener('click', () => scheduleKeywordSearch(true));
     dropdown.addEventListener('change', () => confirmFilters());
 });
 document.getElementById('sortSelect').addEventListener('change', () => confirmFilters());
+// Private score values arrive only after a fresh server session check, and are
+// removed again on logout, tab changes, and back/forward cache transitions.
+document.addEventListener('archivist:auth-change', () => confirmFilters({ resetPage: false }));
 previousPage.addEventListener('click', () => {
     if (previousPage.disabled) return;
     currentPage--;

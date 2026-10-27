@@ -1,0 +1,62 @@
+/* The account control shares the quiet corner treatment of the message box. */
+.admin-auth {
+    --admin-auth-edge: max(20px, env(safe-area-inset-right));
+    --admin-auth-bottom: max(20px, env(safe-area-inset-bottom));
+    position: fixed;
+    right: calc(var(--admin-auth-edge) + 44px);
+    bottom: var(--admin-auth-bottom);
+    z-index: 81;
+    color: var(--ink, #202733);
+    font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.admin-auth [hidden], [data-admin-rating][hidden], [data-admin-rating-reason][hidden],
+[data-admin-doc-link][hidden], [data-admin-score-reasons][hidden], .main[hidden] { display: none !important; }
+.admin-auth button { font: inherit; cursor: pointer; }
+.admin-auth-trigger {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid #e2e5e8;
+    border-radius: 9px;
+    background: #fffffff5;
+    color: #858c94;
+    box-shadow: 0 2px 8px #20273305;
+}
+.admin-auth-trigger:hover, .admin-auth-trigger[aria-expanded="true"], .admin-auth-trigger.is-authenticated { border-color: #bdc3ca; color: #525d69; }
+.admin-auth :focus-visible { outline: 2px solid #8292a6; outline-offset: 3px; }
+.admin-auth-panel {
+    position: absolute;
+    right: -44px;
+    bottom: 47px;
+    width: 300px;
+    max-width: calc(100vw - 40px - env(safe-area-inset-right));
+    max-height: calc(100dvh - 100px - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    padding: 17px 18px 16px;
+    border: 1px solid var(--line, #e0e4ea);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 8px 32px #20273312;
+}
+.admin-auth-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.admin-auth-header h2 { margin: 0; font-size: 13px; font-weight: 550; line-height: 24px; color: #4c5663; }
+.admin-auth-close { display: grid; place-items: center; width: 24px; height: 24px; margin-right: -4px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #8b929c; }
+.admin-auth-close:hover { color: #4c5663; background: #f4f5f7; }
+.admin-auth-label { display: block; margin: 11px 0 5px; color: #7f8792; font-size: 11px; }
+.admin-auth input { display: block; width: 100%; padding: 8px 10px; border: 1px solid #dfe3e8; border-radius: 6px; background: #fff; color: var(--ink, #202733); font: inherit; }
+.admin-auth input:focus { border-color: #97a5b7; outline: 0; box-shadow: 0 0 0 2px #8292a612; }
+.admin-auth-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+.admin-auth-submit { border: 1px solid #dce1e7; border-radius: 5px; padding: 5px 12px; background: #f5f6f8; color: #536071; font-size: 12px !important; }
+.admin-auth-submit:hover:enabled { border-color: #b5bec9; background: #eef1f5; }
+.admin-auth-submit:disabled { opacity: .45; cursor: default; }
+.admin-auth-account p { margin: 0 0 13px; color: #536071; overflow-wrap: anywhere; }
+.admin-auth-status { margin: 11px 0 0; color: #7f8792; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.admin-auth-status:empty { display: none; }
+.admin-auth-status.is-error { color: #9b6358; }
+@media (max-width: 650px) {
+    .admin-auth { --admin-auth-edge: max(18px, env(safe-area-inset-right)); --admin-auth-bottom: max(18px, env(safe-area-inset-bottom)); }
+    .admin-auth input { font-size: 16px; }
+}
+@media print { .admin-auth { display: none; } }

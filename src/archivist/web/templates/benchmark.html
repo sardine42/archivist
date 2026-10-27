@@ -104,42 +104,91 @@
 </style>
 
 <script>
-let DATA;
+let DATA = null;
+let benchmarkAuthorized = false;
+let benchmarkGeneration = 0;
+let benchmarkRequest = null;
 
 const CAT_LABELS = {'generative-rec':'生成式', 'discriminative-rec':'判别式', 'llm':'LLM', 'other':'其他'};
 
+function clearBenchmark() {
+    ++benchmarkGeneration;
+    if (benchmarkRequest) benchmarkRequest.abort();
+    benchmarkRequest = null;
+    DATA = null;
+    _bmModelFilter = '';
+    ['bm-sections', 'bm-detail', 'dsMenu', 'catMenu', 'coMenu', 'tagMenu', 'bmModelSearchList'].forEach(function (id) {
+        const element = document.getElementById(id);
+        if (element) element.replaceChildren();
+    });
+    const count = document.getElementById('dsCount');
+    if (count) count.textContent = '';
+    const input = document.getElementById('bmModelSearch');
+    if (input) input.value = '';
+    const detail = document.getElementById('bm-detail');
+    if (detail) detail.style.display = 'none';
+    document.querySelectorAll('.benchmark-page .dropdown-btn').forEach(function (button) { button.textContent = '全部 ▾'; });
+}
+
 async function init() {
-    DATA = await fetch('/benchmark/data.json').then(r => r.json());
-    document.getElementById('dsCount').textContent = `${DATA.datasets.length} datasets`;
-
-    // Populate filter dropdowns
-    populateMenu('dsMenu', 'dsFilter', DATA.datasets.map(d => ({value: d.slug, label: d.name})));
-    populateMenu('catMenu', 'catFilter', (DATA.categories || []).map(c => ({value: c, label: CAT_LABELS[c] || c})));
-    populateMenu('coMenu', 'coFilter', (DATA.companies || []).map(c => ({value: c, label: c})));
-    var tagItems = (DATA.tag_list || []).map(function(t) { return {value: t, label: t}; });
-    populateMenu('tagMenu', 'tagFilter', tagItems);
-
-    // Populate model-name datalist from all unique benchmark entries
-    var modelNames = new Set();
-    DATA.datasets.forEach(ds => ds.entries.forEach(e => {
-        if (e.model) modelNames.add(e.model);
-    }));
-    var bmDl = document.getElementById('bmModelSearchList');
-    if (bmDl) {
-        Array.from(modelNames).sort().forEach(name => {
-            var opt = document.createElement('option');
-            opt.value = name;
-            bmDl.appendChild(opt);
+    if (!benchmarkAuthorized || !document.getElementById('bm-sections')) return;
+    const version = ++benchmarkGeneration;
+    if (benchmarkRequest) benchmarkRequest.abort();
+    const controller = new AbortController();
+    benchmarkRequest = controller;
+    try {
+        const response = await fetch('/benchmark/data.json', {
+            credentials: 'same-origin', cache: 'no-store', redirect: 'manual', signal: controller.signal
         });
-    }
+        if (version !== benchmarkGeneration || !benchmarkAuthorized) return;
+        if (response.status === 401 || response.status === 403 || response.type === 'opaqueredirect') {
+            document.dispatchEvent(new CustomEvent('archivist:session-expired'));
+            return;
+        }
+        if (!response.ok) throw new Error('Benchmark unavailable');
+        const data = await response.json();
+        if (version !== benchmarkGeneration || !benchmarkAuthorized || !document.getElementById('bm-sections')) return;
+        if (!data || !Array.isArray(data.datasets)) throw new Error('Benchmark unavailable');
+        DATA = data;
+        document.getElementById('dsCount').textContent = `${DATA.datasets.length} datasets`;
 
-    renderAll();
+        // Populate filter dropdowns
+        populateMenu('dsMenu', 'dsFilter', DATA.datasets.map(d => ({value: d.slug, label: d.name})));
+        populateMenu('catMenu', 'catFilter', (DATA.categories || []).map(c => ({value: c, label: CAT_LABELS[c] || c})));
+        populateMenu('coMenu', 'coFilter', (DATA.companies || []).map(c => ({value: c, label: c})));
+        var tagItems = (DATA.tag_list || []).map(function(t) { return {value: t, label: t}; });
+        populateMenu('tagMenu', 'tagFilter', tagItems);
+
+        // Populate model-name datalist from all unique benchmark entries
+        var modelNames = new Set();
+        DATA.datasets.forEach(ds => ds.entries.forEach(e => {
+            if (e.model) modelNames.add(e.model);
+        }));
+        var bmDl = document.getElementById('bmModelSearchList');
+        if (bmDl) {
+            Array.from(modelNames).sort().forEach(name => {
+                var opt = document.createElement('option');
+                opt.value = name;
+                bmDl.appendChild(opt);
+            });
+        }
+
+        renderAll();
+    } catch (error) {
+        if (version !== benchmarkGeneration || !benchmarkAuthorized || error.name === 'AbortError') return;
+        DATA = null;
+        const container = document.getElementById('bm-sections');
+        if (container) container.textContent = '数据暂时无法加载，请刷新重试。';
+    } finally {
+        if (benchmarkRequest === controller) benchmarkRequest = null;
+    }
 }
 
 // Model-name search state (lowercased; '' = inactive)
 var _bmModelFilter = '';
 
 function onBmModelSearchInput() {
+    if (!benchmarkAuthorized || !DATA) return;
     var raw = (document.getElementById('bmModelSearch').value || '').trim();
     if (!raw) { _bmModelFilter = ''; renderAll(); return; }
     var lower = raw.toLowerCase();
@@ -205,6 +254,7 @@ document.addEventListener('click', function(e) {
 function applyFilters() { renderAll(); }
 
 function renderAll() {
+    if (!benchmarkAuthorized || !DATA || !document.getElementById('bm-sections')) return;
     var dsSlugs = ddGetChecked('dsMenu');
     var cats = ddGetChecked('catMenu');
     var cos = ddGetChecked('coMenu');
@@ -321,7 +371,9 @@ function sortTable(tid, col) {
 }
 
 function showDetail(model, paperId, dsName) {
+    if (!benchmarkAuthorized || !DATA) return;
     const panel = document.getElementById('bm-detail');
+    if (!panel) return;
     // Look up the model's *own* paper via the DAG-derived index. If absent,
     // the model is unread (only referenced as a baseline) — explicitly show
     // 未收录, do NOT fall back to the citing paper's info.
@@ -413,6 +465,10 @@ function getMetricTooltip(m) {
     return m;
 }
 
-init();
+document.addEventListener('archivist:auth-change', function (event) {
+    benchmarkAuthorized = Boolean(event.detail && event.detail.authenticated);
+    clearBenchmark();
+    if (benchmarkAuthorized) init();
+});
 </script>
 {% endblock %}

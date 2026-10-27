@@ -26,20 +26,26 @@ site_bp = Blueprint("site", __name__)
 
 
 @site_bp.before_app_request
-def guard_personal_documents():
-    if request.path == "/docs" or request.path.startswith("/docs/"):
+def guard_admin_pages():
+    if _is_admin_path():
         from archivist.web.auth import current_admin
         if current_admin() is None:
+            if request.path.startswith("/benchmark/") and request.path.endswith(".json"):
+                return _json({"error": {"code": "unauthorized", "message": "请先登录。"}}), 401
             return redirect("/login/?" + urlencode({"next": request.full_path.rstrip("?")}), code=302)
 
 
 @site_bp.after_app_request
-def private_document_headers(response):
-    if request.path == "/docs" or request.path.startswith("/docs/"):
+def private_page_headers(response):
+    if _is_admin_path():
         response.headers["Cache-Control"] = "private, no-store"
         response.vary.add("Cookie")
         response.headers["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+def _is_admin_path():
+    return request.path in {"/docs", "/benchmark"} or request.path.startswith(("/docs/", "/benchmark/"))
 
 
 @site_bp.route("/login/")

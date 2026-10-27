@@ -157,28 +157,6 @@ def prepare_graph_data(dataset: str | None = None) -> dict:
         if node.get("is_proposed") and node.get("paper_id"):
             paper_to_dag_node[node["paper_id"]] = name
 
-    # Benchmarks
-    benchmarks = {}
-    for ds in list_datasets():
-        entries = get_leaderboard(ds)
-        if not entries:
-            continue
-        ds_entries = []
-        for e in entries:
-            metrics = {k: v for k, v in e.metrics.items() if is_standard_metric(k)}
-            if not metrics:
-                continue
-            ds_entries.append({
-                "model": e.model, "paper_id": e.paper_id, "category": e.category,
-                "metrics": metrics, "is_proposed_model": e.is_proposed_model,
-                "dag_node": paper_to_dag_node.get(e.paper_id, "") if e.is_proposed_model else (e.model if e.model in proposed else ""),
-                "has_reading": e.model in proposed or (e.is_proposed_model and e.paper_id in paper_to_dag_node),
-                "reading_url": reading_urls.get(e.paper_id, ""),
-                "source_papers": e.source_papers or [e.paper_id],
-            })
-        if ds_entries:
-            benchmarks[ds] = ds_entries
-
     # Always expose the 4 standard paper categories so the filter list aligns
     # with paper-list page even if some categories have zero nodes currently
     categories = ["generative-rec", "discriminative-rec", "llm", "other"]
@@ -199,7 +177,6 @@ def prepare_graph_data(dataset: str | None = None) -> dict:
 
     return {
         "graph": graph_data,
-        "benchmarks": benchmarks,
         "paper_groups": paper_groups,
         "paper_to_dag_node": paper_to_dag_node,
         "datasets": datasets,

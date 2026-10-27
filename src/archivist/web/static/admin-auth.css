@@ -10,7 +10,7 @@
     font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 .admin-auth [hidden], [data-admin-rating][hidden], [data-admin-rating-reason][hidden],
-[data-admin-doc-link][hidden], [data-admin-score-reasons][hidden], .main[hidden] { display: none !important; }
+[data-admin-doc-link][hidden], [data-admin-only][hidden], [data-admin-score-reasons][hidden], .main[hidden] { display: none !important; }
 .admin-auth button { font: inherit; cursor: pointer; }
 .admin-auth-trigger {
     display: grid;

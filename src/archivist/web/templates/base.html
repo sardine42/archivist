@@ -31,7 +31,7 @@
             <nav class="nav" aria-label="主导航">
                 <a href="/reading/" class="nav-link {% if request.path.startswith('/reading') %}active{% endif %}">Paper Reading</a>
                 <a href="/graph/" class="nav-link {% if request.path.startswith('/graph') %}active{% endif %}">Model Graph</a>
-                <a href="/benchmark/" class="nav-link {% if request.path.startswith('/benchmark') %}active{% endif %}">Benchmarks</a>
+                <a href="/benchmark/" class="nav-link {% if request.path.startswith('/benchmark') %}active{% endif %}" data-admin-only hidden>Benchmarks</a>
             </nav>
         </div>
     </header>

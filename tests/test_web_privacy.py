@@ -147,7 +147,7 @@ class WebPrivacyTests(unittest.TestCase):
                     self.assert_no_private_content(response)
 
     def test_public_json_and_search_source_ignore_personal_metadata(self):
-        for url in ("/graph/data.json", "/benchmark/data.json", "/search/model-index.json"):
+        for url in ("/graph/data.json", "/search/model-index.json"):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
@@ -159,6 +159,85 @@ class WebPrivacyTests(unittest.TestCase):
         self.assertIn("Fictional public report", source)
         self.assertNotIn("PRIVATE_USER_REASON_SENTINEL", source)
         self.assertNotIn("PRIVATE_USER_NOTES_SENTINEL", source)
+
+    def test_anonymous_benchmark_pages_redirect_without_rendering_private_data(self):
+        with patch("archivist.web.routes.site.prepare_benchmark_data") as prepare:
+            for url in ("/benchmark", "/benchmark/", "/%62enchmark/", "/benchmar%6b/"):
+                for method in ("GET", "HEAD"):
+                    with self.subTest(url=url, method=method):
+                        response = self.client.open(url, method=method)
+                        self.assertEqual(response.status_code, 302)
+                        self.assertTrue(response.headers["Location"].startswith("/login/?next="))
+                        self.assertIn("no-store", response.headers.get("Cache-Control", ""))
+                        self.assertIn("Cookie", response.vary)
+                        self.assert_no_private_content(response)
+            prepare.assert_not_called()
+
+    def test_anonymous_benchmark_json_is_denied_for_get_head_and_encoded_paths(self):
+        with patch("archivist.web.routes.site.prepare_benchmark_data") as prepare:
+            paths = ("/benchmark/data.json", "/benchmark/data.json?fresh=1", "/%62enchmark/data.json",
+                     "/benchmar%6b/data.json", "/benchmark/%64ata.json", "/benchmark/data%2ejson",
+                     "/benchmark/unknown.json")
+            for url in paths:
+                for method in ("GET", "HEAD"):
+                    with self.subTest(url=url, method=method):
+                        response = self.client.open(url, method=method)
+                        self.assertEqual(response.status_code, 401)
+                        self.assertNotIn("Location", response.headers)
+                        self.assertIn("no-store", response.headers.get("Cache-Control", ""))
+                        self.assertIn("Cookie", response.vary)
+                        self.assert_no_private_content(response)
+            prepare.assert_not_called()
+        # The restricted prefix must not accidentally encompass other pages.
+        self.assertEqual(self.client.get("/benchmarking/").status_code, 404)
+        self.assertEqual(self.client.get("/graph/data.json").status_code, 200)
+
+    def test_authenticated_benchmark_html_and_json_remain_accessible(self):
+        payload = {"datasets": [{"name": "PRIVATE_BENCHMARK_SENTINEL", "entries": [
+            {"model": "ExampleNet", "metrics": {"NDCG@10": 0.123456789}}]}]}
+        with patch("archivist.web.auth.current_admin", return_value={"username": "fictional-admin"}), \
+                patch("archivist.web.routes.site.prepare_benchmark_data", return_value=payload):
+            for url in ("/benchmark/", "/benchmark/data.json", "/%62enchmark/data%2ejson"):
+                for method in ("GET", "HEAD"):
+                    with self.subTest(url=url, method=method):
+                        response = self.client.open(url, method=method)
+                        self.assertEqual(response.status_code, 200)
+                        self.assertIn("no-store", response.headers.get("Cache-Control", ""))
+                        self.assertIn("Cookie", response.vary)
+                        if method == "GET" and response.is_json:
+                            self.assertEqual(response.json, payload)
+
+    def test_public_graph_and_model_index_do_not_republish_benchmark_metric_tables(self):
+        from archivist.services import benchmark
+
+        benchmark_dir = self.directory / "benchmarks"
+        benchmark_dir.mkdir()
+        (benchmark_dir / "_index.json").write_text(
+            json.dumps({"Fictional dataset": "fictional-dataset.md"}), encoding="utf-8")
+        (benchmark_dir / "fictional-dataset.md").write_text(
+            "# Benchmark: Fictional dataset\n\n## 生成式模型\n\n"
+            "| Rank | Model | Paper | NDCG@10 | Sources | Hyperparams | Notes |\n"
+            "|---|---|---|---|---|---|---|\n"
+            "| 1 | ExampleNet ★ | 2501.00001 | 0.123456789 | 2501.00001 | | |\n",
+            encoding="utf-8")
+        with patch("archivist.services.benchmark.BENCHMARKS_DIR", benchmark_dir), \
+                patch("archivist.web.data.list_datasets", wraps=benchmark.list_datasets), \
+                patch("archivist.web.data.get_leaderboard", wraps=benchmark.get_leaderboard):
+            self.assertEqual(benchmark.list_datasets(), ["Fictional dataset"])
+            self.assertEqual(benchmark.get_leaderboard("Fictional dataset")[0].metrics,
+                             {"NDCG@10": 0.123456789})
+            for url in ("/graph/data.json", "/search/model-index.json"):
+                with self.subTest(url=url):
+                    response = self.client.get(url)
+                    self.assertEqual(response.status_code, 200)
+                    text = response.get_data(as_text=True)
+                    self.assertNotIn("0.123456789", text)
+                    self.assertNotIn('"metrics"', text)
+            with patch("archivist.web.auth.current_admin", return_value={"username": "fictional-admin"}):
+                response = self.client.get("/benchmark/data.json")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json["datasets"][0]["entries"][0]["metrics"],
+                                 {"NDCG@10": 0.123456789})
 
     def test_static_build_keeps_personal_metadata_outside_public_output(self):
         from archivist.web.build import build_site

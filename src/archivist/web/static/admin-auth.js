@@ -16,7 +16,7 @@
     const logout = document.getElementById('adminAuthLogout');
     const status = document.getElementById('adminAuthStatus');
     const main = document.querySelector('main');
-    const isPrivateDocument = window.location.pathname.startsWith('/docs/');
+    const isPrivatePage = /^\/(?:docs|benchmark)(?:\/|$)/.test(window.location.pathname);
     const isLoginPage = /^\/login\/?$/.test(window.location.pathname) || Boolean(document.querySelector('[data-auth-login-page]'));
     let authenticated = false;
     let csrfToken = '';
@@ -63,6 +63,7 @@
         });
         document.querySelectorAll('[data-rating]').forEach(function (element) { delete element.dataset.rating; });
         document.querySelectorAll('[data-admin-doc-link]').forEach(function (element) { element.hidden = true; });
+        document.querySelectorAll('[data-admin-only]').forEach(function (element) { element.hidden = true; });
         document.querySelectorAll('[data-admin-doc-count]').forEach(function (element) { element.textContent = ''; });
         document.querySelectorAll('[data-admin-score-reasons]').forEach(function (element) {
             element.hidden = element.dataset.publicReasons !== 'true';
@@ -76,7 +77,7 @@
                 privateOption.remove();
             }
         }
-        if (isPrivateDocument && main) main.hidden = true;
+        if (isPrivatePage && main) main.hidden = true;
         notifyAuthChange();
     }
 
@@ -108,6 +109,7 @@
             });
         });
         document.querySelectorAll('[data-admin-doc-link]').forEach(function (element) { element.hidden = false; });
+        document.querySelectorAll('[data-admin-only]').forEach(function (element) { element.hidden = false; });
         document.querySelectorAll('[data-admin-doc-count]').forEach(function (element) {
             element.textContent = Number.isSafeInteger(data.doc_count) && data.doc_count >= 0 ? String(data.doc_count) : '';
         });
@@ -120,7 +122,7 @@
                 sort.appendChild(option);
             }
         }
-        if (isPrivateDocument && main) main.hidden = false;
+        if (isPrivatePage && main) main.hidden = false;
         notifyAuthChange();
     }
 
@@ -165,8 +167,8 @@
         } catch (_) { return '/reading/'; }
     }
 
-    function privateDocumentExpired() {
-        if (!isPrivateDocument) return;
+    function privatePageExpired() {
+        if (!isPrivatePage) return;
         if (main) main.replaceChildren();
         window.location.replace('/login/?next=' + encodeURIComponent(window.location.pathname + window.location.search));
     }
@@ -185,7 +187,7 @@
                 username = '';
                 passwordInput.value = '';
                 renderAccount();
-                privateDocumentExpired();
+                privatePageExpired();
                 return;
             }
             if (!session.response.ok || typeof session.data.authenticated !== 'boolean') throw new Error('session unavailable');
@@ -193,7 +195,7 @@
                 username = '';
                 renderAccount();
                 if (!session.data.enabled && !panel.hidden) statusText('登录暂不可用。', true);
-                privateDocumentExpired();
+                privatePageExpired();
                 return;
             }
             csrfToken = typeof session.data.csrf_token === 'string' ? session.data.csrf_token : '';
@@ -204,7 +206,7 @@
                 username = '';
                 passwordInput.value = '';
                 renderAccount();
-                privateDocumentExpired();
+                privatePageExpired();
                 return;
             }
             if (!privateData.response.ok) throw new Error('private data unavailable');
@@ -252,6 +254,15 @@
     });
     document.addEventListener('archivist:corner-open', function (event) {
         if (event.detail !== 'auth') closePanel(false);
+    });
+    document.addEventListener('archivist:session-expired', function () {
+        ++generation;
+        authenticated = false;
+        csrfToken = '';
+        passwordInput.value = '';
+        clearPrivate();
+        renderAccount();
+        privatePageExpired();
     });
 
     form.addEventListener('submit', async function (event) {
@@ -307,7 +318,7 @@
                 if (channel) channel.postMessage({type: 'logout'});
                 renderAccount();
                 closePanel(true);
-                if (isPrivateDocument) { if (main) main.replaceChildren(); window.location.replace('/reading/'); }
+                if (isPrivatePage) { if (main) main.replaceChildren(); window.location.replace('/reading/'); }
             } else {
                 authenticated = true;
                 csrfToken = token;
@@ -336,7 +347,7 @@
             passwordInput.value = '';
             clearPrivate();
             renderAccount();
-            if (event.data.type === 'logout') privateDocumentExpired();
+            if (event.data.type === 'logout') privatePageExpired();
             else refreshSession();
         });
     } catch (_) { /* Focus and visibility checks also cover browsers without BroadcastChannel. */ }

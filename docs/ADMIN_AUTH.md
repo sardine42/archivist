@@ -38,6 +38,8 @@ The builder writes the private export beside the archive, outside the static out
 
 Protect both the exact `/docs` path and the entire `/docs/` prefix, including HTML, images, HEAD, and Range requests. Use a `^~ /docs/` location so generic asset regular expressions cannot bypass authorization. All document responses, including redirects and errors, must use `Cache-Control: private, no-store` and `Vary: Cookie`. Remove the old Basic authentication gate when enabling session authentication; there must be no independent fallback that bypasses the session check. Unauthorized document requests should redirect to `/login/?next=...`, while API requests return `401`.
 
+The Benchmark section is also administrator-only. Apply the same gate to the exact `/benchmark` path and the entire `/benchmark/` prefix, and hide its navigation link until a session is verified. Unauthorized Benchmark JSON requests return `401` with no data; other requests redirect to login. Remove or protect any existing exact `/benchmark/data.json` location, since it takes precedence over prefix locations. All Benchmark responses, including data and errors, need `private, no-store` and `Vary: Cookie`. The public graph export intentionally omits the legacy full Benchmark table; the graph's paper relationships and dataset labels remain public.
+
 On the API origin, the internal authorization location can use this pattern:
 
 ```nginx

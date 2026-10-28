@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 import markdown
-from flask import Blueprint, abort, redirect, render_template, request, send_file
+from flask import Blueprint, abort, render_template, request, send_file
 
 from archivist.config import DOCS_DIR, PAPERS_DIR
 from archivist.services.paper_store import get_paper, get_paper_dir, list_papers
@@ -337,22 +337,10 @@ def paper_detail(year: int, slug: str):
     )
 
 
-@reading_bp.route("/<int:year>/<slug>/pdf")
+@reading_bp.route("/<int:year>/<slug>/pdf", strict_slashes=False)
 def paper_pdf(year: int, slug: str):
-    """Redirect legacy PDF links to ArXiv without serving archived files."""
-    paper = get_paper(slug)
-    if not paper or paper.year != year:
-        abort(404)
-    if not paper.arxiv_id:
-        abort(410)
-    # Accept both modern and pre-2007 IDs, retaining optional versions. The
-    # destination is always ArXiv; metadata cannot supply a redirect URL.
-    if not re.fullmatch(
-        r"(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(?:v[1-9]\d*)?",
-        paper.arxiv_id,
-    ):
-        abort(404)
-    return redirect(f"https://arxiv.org/pdf/{paper.arxiv_id}", code=302)
+    """Retire legacy downloads; paper pages link directly to ArXiv."""
+    return "", 410, {"Cache-Control": "no-store"}
 
 
 @reading_bp.route("/<int:year>/<slug>/figures/<path:filename>")

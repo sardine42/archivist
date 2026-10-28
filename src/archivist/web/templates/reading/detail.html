@@ -54,8 +54,7 @@
                 <span data-admin-rating hidden></span>
             </div>
             <div class="rd-sources">
-                {% if paper.url %}<a href="{{ paper.url }}" target="_blank" rel="noopener noreferrer">ArXiv ↗</a>{% endif %}
-                {% if paper.arxiv_id %}<a href="https://arxiv.org/pdf/{{ paper.arxiv_id | urlencode }}" target="_blank" rel="noopener noreferrer">PDF ↗</a>{% endif %}
+                {% if paper.arxiv_id %}<a href="https://arxiv.org/abs/{{ paper.arxiv_id | urlencode }}" target="_blank" rel="noopener noreferrer">ArXiv ↗</a>{% endif %}
             </div>
         </div>
 

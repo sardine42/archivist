@@ -1,4 +1,4 @@
-/* Paper detail layout. Keep document styles isolated from reports and lists. */
+/* Shared layout for paper readings and personal documents. */
 body:has(.reading-detail) { background: #fff; }
 body:has(.reading-detail) > .main { max-width: none; padding: 28px var(--page-gutter) 64px; }
 .reading-detail {
@@ -27,6 +27,9 @@ body:has(.reading-detail) > .main { max-width: none; padding: 28px var(--page-gu
 .rd-sources { display: flex; gap: 16px; margin-left: auto; white-space: nowrap; }
 .rd-sources a { display: inline-flex; align-items: center; gap: 4px; }
 .rd-summary { font-size: 15px; line-height: 1.9; color: var(--rd-body); margin-top: 18px; }
+.document-detail .rd-paper-header { padding-bottom: 24px; border-bottom: 1px solid var(--rd-line); }
+.document-detail .rd-meta .doc-team { white-space: normal; overflow-wrap: anywhere; }
+.document-detail .rd-visible-tags { margin-top: 16px; }
 .rd-extra { display: flex; gap: 9px 22px; flex-wrap: wrap; align-items: baseline; padding: 14px 0 23px; border-bottom: 1px solid var(--rd-line); }
 .rd-extra details { font-size: 12px; max-width: 100%; }
 .reading-detail summary { color: var(--rd-dim); font-size: 12px; cursor: pointer; }

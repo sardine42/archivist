@@ -1,0 +1,16 @@
+{% macro reading_tabs(active, paper_count=none, digest_count=none) %}
+<nav class="sub-tabs" aria-label="阅读分类">
+    <a href="/reading/" class="sub-tab{{ ' active' if active == 'papers' else '' }}"{% if active == 'papers' %} aria-current="page"{% endif %}>
+        <span class="sub-tab-label">论文</span>
+        {% if paper_count is not none %}<span class="sub-tab-count">{{ paper_count }}</span>{% endif %}
+    </a>
+    <a href="/reading/digests/" class="sub-tab{{ ' active' if active == 'digests' else '' }}"{% if active == 'digests' %} aria-current="page"{% endif %}>
+        <span class="sub-tab-label">报告</span>
+        {% if digest_count is not none %}<span class="sub-tab-count">{{ digest_count }}</span>{% endif %}
+    </a>
+    <a href="/docs/" class="sub-tab{{ ' active' if active == 'docs' else '' }}" data-admin-doc-link hidden{% if active == 'docs' %} aria-current="page"{% endif %}>
+        <span class="sub-tab-label">个人文档</span>
+        <span class="sub-tab-count" data-admin-doc-count></span>
+    </a>
+</nav>
+{% endmacro %}

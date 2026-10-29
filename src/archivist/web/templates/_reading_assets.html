@@ -1,0 +1,13 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='reading-detail.css') }}?v={{ reading_detail_css_version }}">
+<script defer src="{{ url_for('static', filename='reading-detail.js') }}?v={{ reading_detail_js_version }}"></script>
+<script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
+    document.querySelectorAll('code.language-mermaid').forEach(block => {
+        const div = document.createElement('div');
+        div.className = 'mermaid';
+        div.textContent = block.textContent;
+        block.parentElement.replaceWith(div);
+    });
+    await mermaid.run();
+</script>

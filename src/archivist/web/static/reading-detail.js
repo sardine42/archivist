@@ -56,7 +56,7 @@
 
     function updateContents() {
         scheduled = false;
-        if (!sections.length) return;
+        if (!sections.length || !root.getClientRects().length) return;
         let current = sections[0];
         for (let i = sections.length - 1; i >= 0; i--) {
             if (sections[i].heading.getBoundingClientRect().top <= 72) {
@@ -92,5 +92,6 @@
             root.querySelector('.rd-mobile-toc').open = false;
         });
     });
+    document.addEventListener('archivist:auth-change', updateContents);
     updateContents();
 }());

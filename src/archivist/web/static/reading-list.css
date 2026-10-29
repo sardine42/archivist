@@ -37,6 +37,8 @@
 .reading-list .paper-cards { gap: 0; border-top: 1px solid var(--line); }
 .reading-list .paper-card { border-radius: 0; padding: 22px 0; border-bottom: 1px solid var(--line); box-shadow: none; background: transparent; min-width: 0; }
 .reading-list .paper-card:hover { box-shadow: none; }
+.document-list .docs-list-tools { display: flex; justify-content: flex-end; margin-bottom: 22px; }
+.document-list .doc-team { max-width: min(560px, 65vw); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .reading-list .paper-card h2 { margin: 0; font-size: inherit; }
 .reading-list .card-title { margin: 0; color: var(--ink); font-size: 17px; line-height: 1.5; font-weight: 600; letter-spacing: -.12px; overflow-wrap: anywhere; }
 .reading-list .card-title:hover { color: var(--accent); }

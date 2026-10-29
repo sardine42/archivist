@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from '_category.html' import category_badge, category_labels %}
+{% from '_reading_tabs.html' import reading_tabs %}
 {% block title %}Paper Reading — Archivist{% endblock %}
 
 {% block head_extra %}
@@ -31,21 +32,7 @@
     </section>
     {% endif %}
 
-    <!-- Sub-tabs -->
-    <div class="sub-tabs">
-        <a href="/reading/" class="sub-tab {{ 'active' if doc_type != 'digests' else '' }}">
-            <span class="sub-tab-label">论文</span>
-            <span class="sub-tab-count">{{ total }}</span>
-        </a>
-        <a href="/reading/digests/" class="sub-tab {{ 'active' if doc_type == 'digests' else '' }}">
-            <span class="sub-tab-label">报告</span>
-            <span class="sub-tab-count">{{ digest_count or 0 }}</span>
-        </a>
-        <a href="/docs/" class="sub-tab" data-admin-doc-link hidden>
-            <span class="sub-tab-label">个人文档</span>
-            <span class="sub-tab-count" data-admin-doc-count></span>
-        </a>
-    </div>
+    {{ reading_tabs('digests' if doc_type == 'digests' else 'papers', total, digest_count or 0) }}
 
     {% if doc_type == 'digests' %}
     <!-- Digests view -->

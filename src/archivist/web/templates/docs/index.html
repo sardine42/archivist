@@ -1,69 +1,60 @@
 {% extends "base.html" %}
+{% from '_reading_tabs.html' import reading_tabs %}
 {% block title %}个人文档 — Archivist{% endblock %}
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='reading-list.css') }}?v={{ reading_list_css_version }}">
+{% endblock %}
+
 {% block content %}
-<div class="reading-list">
-    <div class="page-header">
-        <h1>Paper Reading</h1>
-        <span class="paper-count"><span data-admin-doc-count></span> 份文档</span>
+<div class="reading-list document-list">
+    {{ reading_tabs('docs') }}
+
+    <div class="docs-list-tools">
+        <label class="filter-field list-sort" for="docSort">
+            <span class="filter-label">排序</span>
+            <select id="docSort" class="sort-select">
+                <option value="date" selected>日期 ↓</option>
+                <option value="title">标题 A–Z</option>
+            </select>
+        </label>
     </div>
 
-    <!-- Sub-tabs (same as reading/index.html) -->
-    <div class="sub-tabs">
-        <a href="/reading/" class="sub-tab">
-            <span class="sub-tab-icon">📄</span>
-            <span class="sub-tab-label">论文</span>
-        </a>
-        <a href="/reading/digests/" class="sub-tab">
-            <span class="sub-tab-icon">📅</span>
-            <span class="sub-tab-label">报告</span>
-        </a>
-        <a href="/docs/" class="sub-tab active" data-admin-doc-link hidden>
-            <span class="sub-tab-icon">🔒</span>
-            <span class="sub-tab-label">个人文档</span>
-            <span class="sub-tab-count" data-admin-doc-count></span>
-        </a>
-    </div>
-
-    <!-- Sort -->
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-        <label style="color:#555;font-size:13px;">排序:</label>
-        <select id="sortSelect" onchange="sortDocs()" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
-            <option value="date" selected>日期 ↓</option>
-            <option value="title">标题 A-Z</option>
-        </select>
-    </div>
-
-    <!-- Doc cards -->
-    <div class="doc-list" id="docList">
+    <div class="paper-cards" id="docList">
         {% for doc in docs %}
-        <a href="/docs/{{ doc.slug }}/" class="doc-card" data-date="{{ doc.date }}" data-title="{{ doc.title }}">
-            <div class="doc-card-title">{{ doc.title }}</div>
-            <div class="doc-card-meta">
-                {% if doc.team %}<span class="tag tag-company">{{ doc.team }}</span>{% endif %}
-                {% if doc.type %}<span class="tag">{{ doc.type }}</span>{% endif %}
-                {% if doc.date %}<span class="meta-date">{{ doc.date }}</span>{% endif %}
+        <article class="paper-card" data-date="{{ doc.date }}" data-title="{{ doc.title }}">
+            <h2><a href="/docs/{{ doc.slug }}/" class="card-title">{{ doc.title }}</a></h2>
+            {% if doc.summary %}<p class="card-summary">{{ doc.summary }}</p>{% endif %}
+            <div class="card-bottom">
+                <div class="card-facts">
+                    {% if doc.team %}<span class="doc-team" title="{{ doc.team }}">{{ doc.team }}</span>{% endif %}
+                    {% if doc.type %}<span>{{ {'internal-doc': '内部文档', 'article': '文章'}.get(doc.type, doc.type) }}</span>{% endif %}
+                    {% if doc.date %}<time datetime="{{ doc.date }}">{{ doc.date }}</time>{% endif %}
+                </div>
             </div>
-            {% if doc.summary %}
-            <div class="doc-card-summary">{{ doc.summary }}</div>
-            {% endif %}
-        </a>
+        </article>
+        {% else %}
+        <div class="empty-state">暂无个人文档</div>
         {% endfor %}
     </div>
+
+    <footer class="paper-list-footer">
+        <span class="paper-count">已收录 <span data-admin-doc-count></span> 份文档</span>
+    </footer>
 </div>
 
 <script>
-function sortDocs() {
-    var sortBy = document.getElementById('sortSelect').value;
-    var container = document.getElementById('docList');
-    var cards = [].slice.call(container.querySelectorAll('.doc-card'));
-    cards.sort(function(a, b) {
-        if (sortBy === 'date') {
-            return (b.dataset.date || '').localeCompare(a.dataset.date || '');
-        } else {
-            return (a.dataset.title || '').localeCompare(b.dataset.title || '');
-        }
+(function () {
+    const sort = document.getElementById('docSort');
+    const container = document.getElementById('docList');
+    sort.addEventListener('change', function () {
+        const cards = Array.from(container.querySelectorAll('.paper-card'));
+        cards.sort(function (a, b) {
+            return sort.value === 'date'
+                ? (b.dataset.date || '').localeCompare(a.dataset.date || '')
+                : (a.dataset.title || '').localeCompare(b.dataset.title || '', 'zh-CN');
+        });
+        cards.forEach(function (card) { container.appendChild(card); });
     });
-    cards.forEach(function(card) { container.appendChild(card); });
-}
+}());
 </script>
 {% endblock %}
